@@ -1,0 +1,20 @@
+[package]
+name = "qramdump"
+version = "0.1.0"
+edition = "2024"
+authors = ["Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>"]
+license = "BSD-3-Clause"
+# description = "XXXXX"
+readme = "README.md"
+repository = "https://github.com/qualcomm/qdlrs"
+categories = ["command-line-utilities"]
+publish = false # TODO
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+anyhow = "1.0.89"
+clap = { version = "4.5.18", features = ["derive"] }
+clap-num = "1.1.1"
+qdl = { path = "../qdl/", features = ["serial", "usb"] }

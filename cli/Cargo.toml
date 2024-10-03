@@ -1,0 +1,25 @@
+[package]
+name = "qdl-rs"
+version = "0.1.0"
+edition = "2024"
+authors = ["Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>"]
+license = "BSD-3-Clause"
+# description = "XXXXX"
+readme = "README.md"
+repository = "https://github.com/qualcomm/qdlrs"
+categories = ["command-line-utilities"]
+publish = false # TODO
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+anyhow = "1.0.89"
+clap = { version = "4.5.18", features = ["derive"] }
+clap-num = "1.1.1"
+qdl = { path = "../qdl/", features = ["serial", "usb"] }
+gptman = "1.1.2"
+indexmap = "2.5.0"
+owo-colors = "4.1.0"
+xmltree = { version = "0.11.0", features = ["attribute-order"] }
+itertools = "0.14.0"
