@@ -47,7 +47,7 @@ pub fn main() -> Result<()> {
     let mut fh_dev = FirehoseDevice {
         rw: rw_channel.as_mut(),
         fh_cfg: FirehoseConfiguration::default(),
-        session_done: true,
+        reset_on_drop: false,
     };
 
     sahara_run(

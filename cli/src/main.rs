@@ -217,7 +217,7 @@ fn main() -> Result<()> {
             // The remaining values are overwritten at runtime through a <configure> handshake
             ..Default::default()
         },
-        session_done: false,
+        reset_on_drop: true,
     };
 
     // In case another program on the system has already consumed the HELLO packet,
@@ -377,7 +377,7 @@ fn main() -> Result<()> {
     };
 
     // Finally, reset the device
-    fh_dev.session_done = true;
+    fh_dev.reset_on_drop = false;
     firehose_reset(&mut fh_dev, &reset_mode, 0)?;
 
     println!(
