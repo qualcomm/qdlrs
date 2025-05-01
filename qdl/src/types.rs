@@ -96,7 +96,7 @@ pub trait QdlReadWrite: Read + Write {}
 pub struct FirehoseDevice<'a> {
     pub rw: &'a mut dyn QdlReadWrite,
     pub fh_cfg: FirehoseConfiguration,
-    pub session_done: bool,
+    pub reset_on_drop: bool,
 }
 
 impl Read for FirehoseDevice<'_> {
@@ -129,7 +129,7 @@ impl Drop for FirehoseDevice<'_> {
     fn drop(&mut self) {
         // Avoid having the board be stuck in EDL limbo in case of errors
         // TODO: watch 'rawmode' and adjust accordingly
-        if !self.session_done {
+        if self.reset_on_drop {
             println!(
                 "Firehose {}. Resetting the board to {}, try again.",
                 "failed".bright_red(),
