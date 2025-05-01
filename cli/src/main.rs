@@ -217,7 +217,7 @@ fn main() -> Result<()> {
             // The remaining values are overwritten at runtime through a <configure> handshake
             ..Default::default()
         },
-        reset_on_drop: true,
+        reset_on_drop: false,
     };
 
     // In case another program on the system has already consumed the HELLO packet,
@@ -260,6 +260,9 @@ fn main() -> Result<()> {
         vec![],
         args.verbose_sahara,
     )?;
+
+    // If we're past Sahara, activate the Firehose reset-on-drop listener
+    fh_dev.reset_on_drop = true;
 
     // Get any "welcome" logs
     firehose_read(&mut fh_dev, firehose_parser_ack_nak)?;
