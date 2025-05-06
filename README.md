@@ -12,9 +12,9 @@ qramdump/ - Tool to receive memory dumps from a crashed device
 ```
 
 ## Building
-Run `cargo build` to build all executables within this repo.
+Run `cargo build [--release]` to build all executables within this repo.
 
-Use `cargo run --bin <executable_name> [-- extra_args]` to quickly build one of the programs from source and run it.
+Use `cargo run [--release] --bin <executable_name> [-- extra_args]` to quickly build one of the programs from source and run it.
 
 ## Running qdl
 ```
