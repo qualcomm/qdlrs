@@ -1,3 +1,3 @@
 [workspace]
-members = ["cli", "qramdump", "qdl"]
+members = ["cli", "qdl", "qramdump", "qviptblgen"]
 resolver = "2"

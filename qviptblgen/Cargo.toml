@@ -1,5 +1,5 @@
 [package]
-name = "qdl-rs"
+name = "qviptblgen"
 version = "0.1.0"
 edition = "2024"
 authors = ["Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>"]
@@ -17,9 +17,4 @@ maintenance = { status = "actively-developed" }
 anyhow = "1.0.89"
 clap = { version = "4.5.18", features = ["derive"] }
 clap-num = "1.1.1"
-qdl = { path = "../qdl/", features = ["serial", "usb", "vip"] }
-gptman = "1.1.2"
-indexmap = "2.5.0"
-owo-colors = "4.1.0"
-xmltree = { version = "0.11.0", features = ["attribute-order"] }
-itertools = "0.14.0"
+qdl = { path = "../qdl/", features = ["vip"] }
