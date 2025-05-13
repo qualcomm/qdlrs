@@ -93,19 +93,19 @@ pub trait QdlChan {
 
 pub trait QdlReadWrite: Read + Write {}
 
-pub struct FirehoseDevice<'a> {
+pub struct QdlDevice<'a> {
     pub rw: &'a mut dyn QdlReadWrite,
     pub fh_cfg: FirehoseConfiguration,
     pub reset_on_drop: bool,
 }
 
-impl Read for FirehoseDevice<'_> {
+impl Read for QdlDevice<'_> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.rw.read(buf)
     }
 }
 
-impl Write for FirehoseDevice<'_> {
+impl Write for QdlDevice<'_> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.rw.write(buf)
     }
@@ -115,7 +115,7 @@ impl Write for FirehoseDevice<'_> {
     }
 }
 
-impl QdlChan for FirehoseDevice<'_> {
+impl QdlChan for QdlDevice<'_> {
     fn fh_config(&self) -> &FirehoseConfiguration {
         &self.fh_cfg
     }
@@ -125,7 +125,7 @@ impl QdlChan for FirehoseDevice<'_> {
     }
 }
 
-impl Drop for FirehoseDevice<'_> {
+impl Drop for QdlDevice<'_> {
     fn drop(&mut self) {
         // Avoid having the board be stuck in EDL limbo in case of errors
         // TODO: watch 'rawmode' and adjust accordingly

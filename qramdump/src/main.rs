@@ -9,7 +9,7 @@ use qdl::{
     self,
     sahara::{SaharaMode, sahara_reset, sahara_run},
     setup_target_device,
-    types::{FirehoseConfiguration, FirehoseDevice, QdlBackend},
+    types::{FirehoseConfiguration, QdlBackend, QdlDevice},
 };
 
 #[derive(Parser, Debug)]
@@ -44,7 +44,7 @@ pub fn main() -> Result<()> {
         Err(e) => bail!("Couldn't set up device: {}", e.to_string()),
     };
 
-    let mut fh_dev = FirehoseDevice {
+    let mut fh_dev = QdlDevice {
         rw: rw_channel.as_mut(),
         fh_cfg: FirehoseConfiguration::default(),
         reset_on_drop: false,

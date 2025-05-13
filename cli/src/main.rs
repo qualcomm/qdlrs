@@ -7,7 +7,7 @@ use itertools::Itertools;
 use owo_colors::OwoColorize;
 use qdl::parsers::{firehose_parser_ack_nak, firehose_parser_configure_response};
 use qdl::sahara::{SaharaCmdModeCmd, SaharaMode, sahara_run, sahara_send_hello_rsp};
-use qdl::types::{FirehoseDevice, FirehoseResetMode, FirehoseStorageType, QdlBackend};
+use qdl::types::{FirehoseResetMode, FirehoseStorageType, QdlBackend, QdlDevice};
 use qdl::{firehose_configure, firehose_read, firehose_reset, types::FirehoseConfiguration};
 use qdl::{
     firehose_get_default_sector_size, firehose_nop, firehose_peek, firehose_program_storage,
@@ -192,7 +192,7 @@ fn main() -> Result<()> {
         Ok(c) => c,
         Err(e) => bail!("Couldn't set up device: {}", e.to_string()),
     };
-    let mut fh_dev = FirehoseDevice {
+    let mut fh_dev = QdlDevice {
         rw: rw_channel.as_mut(),
         fh_cfg: FirehoseConfiguration {
             hash_packets: args.hash_packets,
