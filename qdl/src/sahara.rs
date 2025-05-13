@@ -372,10 +372,14 @@ pub fn sahara_get_ramdump_tbl<T: Read + Write>(
         tbl.push(entry);
         if verbose {
             println!(
-                "\t{} (0x{:x} @ 0x{:x})",
+                "\t{} (0x{:x} @ 0x{:x}){}",
                 String::from_utf8(entry.filename.to_vec())?,
                 entry.len,
-                entry.base
+                entry.base,
+                match entry.save_pref {
+                    0 => "",
+                    _ => " *",
+                }
             );
         }
     }
