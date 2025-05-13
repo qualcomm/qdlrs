@@ -362,7 +362,7 @@ pub fn sahara_get_ramdump_tbl<T: Read + Write>(
     let mut tbl = Vec::<RamdumpTable64>::with_capacity(num_chunks);
 
     let mut buf = vec![0u8; len as usize];
-    let _ = channel.read(&mut buf)?;
+    channel.read_exact(&mut buf)?;
 
     if verbose {
         println!("Available images:");
