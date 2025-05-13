@@ -60,14 +60,23 @@ pub fn print_partition_table<T: Read + Write + QdlChan>(
         phys_part_idx.bright_yellow(),
         channel.fh_config().storage_type.to_string().bright_yellow()
     );
+
     for (idx, part) in gpt.iter() {
+        let size = part.size();
+
         println!(
             "{}] {}: start_sector = {}, {} bytes ({} kiB)",
             idx,
             part.partition_name.as_str(),
             part.starting_lba,
-            part.size().unwrap() * gpt.sector_size,
-            part.size().unwrap() * gpt.sector_size / 1024,
+            match size {
+                Ok(s) => (s * gpt.sector_size).to_string(),
+                Err(_) => "ERROR".to_string(),
+            },
+            match size {
+                Ok(s) => (s * gpt.sector_size / 1024).to_string(),
+                Err(_) => "ERROR".to_string(),
+            }
         );
     }
 
