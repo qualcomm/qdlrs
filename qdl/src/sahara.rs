@@ -437,9 +437,13 @@ pub fn sahara_dump_regions<T: Read + Write>(
         .collect::<Vec<String>>();
 
     std::fs::create_dir_all("ramdump/")?;
-    let filtered_list = match regions_to_dump.len() {
-        // Dump everything if no argument was provided
-        0 => dump_tbl,
+    let filtered_list: Vec<RamdumpTable64> = match regions_to_dump.len() {
+        // Dump everything with save_pref == true if no argument was provided
+        0 => dump_tbl
+            .iter()
+            .filter(|e| e.save_pref != 0)
+            .copied()
+            .collect(),
         _ => dump_tbl
             .iter()
             .filter(|dump_entry| {
