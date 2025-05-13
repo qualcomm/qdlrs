@@ -11,10 +11,10 @@ use xmltree::{self, Element, XMLNode};
 
 use qdl::{
     firehose_checksum_storage, firehose_patch, firehose_program_storage, firehose_read_storage,
-    types::FirehoseChan,
+    types::QdlChan,
 };
 
-fn parse_read_cmd<T: Read + Write + FirehoseChan>(
+fn parse_read_cmd<T: Read + Write + QdlChan>(
     channel: &mut T,
     out_dir: &Path,
     attrs: &IndexMap<String, String>,
@@ -50,7 +50,7 @@ fn parse_read_cmd<T: Read + Write + FirehoseChan>(
     )
 }
 
-fn parse_patch_cmd<T: Read + Write + FirehoseChan>(
+fn parse_patch_cmd<T: Read + Write + QdlChan>(
     channel: &mut T,
     attrs: &IndexMap<String, String>,
     verbose: bool,
@@ -83,7 +83,7 @@ fn parse_patch_cmd<T: Read + Write + FirehoseChan>(
 const BOOTABLE_PART_NAMES: [&str; 3] = ["xbl", "xbl_a", "sbl1"];
 
 // TODO: readbackverify
-fn parse_program_cmd<T: Read + Write + FirehoseChan>(
+fn parse_program_cmd<T: Read + Write + QdlChan>(
     channel: &mut T,
     program_file_dir: &Path,
     attrs: &IndexMap<String, String>,
@@ -162,7 +162,7 @@ fn parse_program_cmd<T: Read + Write + FirehoseChan>(
 }
 
 // TODO: there's some funny optimizations to make here, such as OoO loading files into memory, or doing things while we're waiting on the device to finish
-pub fn parse_program_xml<T: Read + Write + FirehoseChan>(
+pub fn parse_program_xml<T: Read + Write + QdlChan>(
     channel: &mut T,
     xml: &Element,
     program_file_dir: &Path,

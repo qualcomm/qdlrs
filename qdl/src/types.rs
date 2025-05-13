@@ -86,7 +86,7 @@ impl Default for FirehoseConfiguration {
     }
 }
 
-pub trait FirehoseChan {
+pub trait QdlChan {
     fn fh_config(&self) -> &FirehoseConfiguration;
     fn mut_fh_config(&mut self) -> &mut FirehoseConfiguration;
 }
@@ -115,7 +115,7 @@ impl Write for FirehoseDevice<'_> {
     }
 }
 
-impl FirehoseChan for FirehoseDevice<'_> {
+impl QdlChan for FirehoseDevice<'_> {
     fn fh_config(&self) -> &FirehoseConfiguration {
         &self.fh_cfg
     }

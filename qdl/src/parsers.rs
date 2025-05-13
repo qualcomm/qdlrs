@@ -8,8 +8,7 @@ use anyhow::bail;
 use owo_colors::OwoColorize;
 
 use crate::{
-    FirehoseChan, FirehoseResetMode, FirehoseStatus, firehose_configure, firehose_read,
-    firehose_reset,
+    FirehoseResetMode, FirehoseStatus, QdlChan, firehose_configure, firehose_read, firehose_reset,
 };
 
 /// The highest protocol version currently supported by the library
@@ -18,7 +17,7 @@ const FH_PROTO_VERSION_SUPPORTED: u32 = 1;
 // Parsers are kept separate for more flexibility (e.g. log replay analysis)
 
 /// Check "value" for ack/nak (generic)
-pub fn firehose_parser_ack_nak<T: Read + Write + FirehoseChan>(
+pub fn firehose_parser_ack_nak<T: Read + Write + QdlChan>(
     _: &mut T,
     attrs: &IndexMap<String, String>,
 ) -> Result<FirehoseStatus, anyhow::Error> {
@@ -31,7 +30,7 @@ pub fn firehose_parser_ack_nak<T: Read + Write + FirehoseChan>(
 }
 
 /// Parse the \<configure\> response
-pub fn firehose_parser_configure_response<T: Read + Write + FirehoseChan>(
+pub fn firehose_parser_configure_response<T: Read + Write + QdlChan>(
     channel: &mut T,
     attrs: &IndexMap<String, String>,
 ) -> Result<FirehoseStatus, anyhow::Error> {
