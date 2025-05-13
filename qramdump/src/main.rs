@@ -7,7 +7,7 @@ use anyhow::{Result, bail};
 use clap::{Parser, command};
 use qdl::{
     self,
-    sahara::{SaharaMode, sahara_run},
+    sahara::{SaharaMode, sahara_reset, sahara_run},
     setup_target_device,
     types::{FirehoseConfiguration, FirehoseDevice, QdlBackend},
 };
@@ -58,6 +58,8 @@ pub fn main() -> Result<()> {
         args.regions_to_dump,
         args.verbose_sahara,
     )?;
+
+    sahara_reset(&mut fh_dev)?;
 
     Ok(())
 }
