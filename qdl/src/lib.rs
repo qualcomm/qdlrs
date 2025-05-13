@@ -511,7 +511,7 @@ pub fn firehose_read_storage<T: Read + Write + FirehoseChan>(
 
     if !last_read_was_zero_len && channel.fh_config().backend == QdlBackend::Usb {
         // Issue a dummy read to drain the queue
-        let _ = channel.read(&mut [0u8])?;
+        let _ = channel.read(&mut [])?;
     }
 
     if firehose_read::<T>(channel, firehose_parser_ack_nak)? != FirehoseStatus::Ack {
