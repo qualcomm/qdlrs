@@ -44,14 +44,14 @@ pub fn main() -> Result<()> {
         Err(e) => bail!("Couldn't set up device: {}", e.to_string()),
     };
 
-    let mut fh_dev = QdlDevice {
+    let mut qdl_dev = QdlDevice {
         rw: rw_channel.as_mut(),
         fh_cfg: FirehoseConfiguration::default(),
         reset_on_drop: false,
     };
 
     sahara_run(
-        &mut fh_dev,
+        &mut qdl_dev,
         SaharaMode::MemoryDebug,
         None,
         &mut [],
@@ -59,7 +59,7 @@ pub fn main() -> Result<()> {
         args.verbose_sahara,
     )?;
 
-    sahara_reset(&mut fh_dev)?;
+    sahara_reset(&mut qdl_dev)?;
 
     Ok(())
 }

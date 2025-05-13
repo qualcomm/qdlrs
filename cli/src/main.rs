@@ -192,7 +192,7 @@ fn main() -> Result<()> {
         Ok(c) => c,
         Err(e) => bail!("Couldn't set up device: {}", e.to_string()),
     };
-    let mut fh_dev = QdlDevice {
+    let mut qdl_dev = QdlDevice {
         rw: rw_channel.as_mut(),
         fh_cfg: FirehoseConfiguration {
             hash_packets: args.hash_packets,
@@ -223,12 +223,12 @@ fn main() -> Result<()> {
     // In case another program on the system has already consumed the HELLO packet,
     // send a HELLO response upfront, to appease the state machine
     if args.skip_hello_wait {
-        sahara_send_hello_rsp(&mut fh_dev, SaharaMode::Command)?;
+        sahara_send_hello_rsp(&mut qdl_dev, SaharaMode::Command)?;
     }
 
     // Get some info about the device
     let sn = sahara_run(
-        &mut fh_dev,
+        &mut qdl_dev,
         SaharaMode::Command,
         Some(SaharaCmdModeCmd::ReadSerialNum),
         &mut [],
@@ -239,7 +239,7 @@ fn main() -> Result<()> {
     println!("Chip serial number: 0x{:x}", sn);
 
     let key_hash = sahara_run(
-        &mut fh_dev,
+        &mut qdl_dev,
         SaharaMode::Command,
         Some(SaharaCmdModeCmd::ReadOemKeyHash),
         &mut [],
@@ -253,7 +253,7 @@ fn main() -> Result<()> {
 
     // Send the loader (and any other images)
     sahara_run(
-        &mut fh_dev,
+        &mut qdl_dev,
         SaharaMode::WaitingForImage,
         None,
         &mut [mbn_loader],
@@ -262,26 +262,26 @@ fn main() -> Result<()> {
     )?;
 
     // If we're past Sahara, activate the Firehose reset-on-drop listener
-    fh_dev.reset_on_drop = true;
+    qdl_dev.reset_on_drop = true;
 
     // Get any "welcome" logs
-    firehose_read(&mut fh_dev, firehose_parser_ack_nak)?;
+    firehose_read(&mut qdl_dev, firehose_parser_ack_nak)?;
 
     // Send the host capabilities to the device
-    firehose_configure(&mut fh_dev, args.skip_storage_init)?;
+    firehose_configure(&mut qdl_dev, args.skip_storage_init)?;
 
     // Parse some information from the device
-    firehose_read(&mut fh_dev, firehose_parser_configure_response)?;
+    firehose_read(&mut qdl_dev, firehose_parser_configure_response)?;
 
     match args.command {
         Command::Dump { outdir } => {
             fs::create_dir_all(&outdir)?;
             let outpath = Path::new(&outdir);
 
-            for (_, p) in read_gpt_from_storage(&mut fh_dev, args.phys_part_idx)?.iter() {
+            for (_, p) in read_gpt_from_storage(&mut qdl_dev, args.phys_part_idx)?.iter() {
                 let mut out = File::create(outpath.join(p.partition_name.to_string()))?;
                 read_storage_logical_partition(
-                    &mut fh_dev,
+                    &mut qdl_dev,
                     &mut out,
                     &p.partition_name.to_string(),
                     args.phys_part_idx,
@@ -294,13 +294,13 @@ fn main() -> Result<()> {
             let outpath = Path::new(&outdir);
             let mut out = File::create(outpath.join(&name))?;
 
-            read_storage_logical_partition(&mut fh_dev, &mut out, &name, args.phys_part_idx)?
+            read_storage_logical_partition(&mut qdl_dev, &mut out, &name, args.phys_part_idx)?
         }
         Command::Erase { name } => {
-            let part = find_part(&mut fh_dev, &name, args.phys_part_idx)?;
+            let part = find_part(&mut qdl_dev, &name, args.phys_part_idx)?;
 
             firehose_program_storage(
-                &mut fh_dev,
+                &mut qdl_dev,
                 &mut &[0u8][..],
                 &name,
                 (part.ending_lba - part.starting_lba + 1) as usize,
@@ -314,7 +314,7 @@ fn main() -> Result<()> {
             verbose_flasher,
         } => {
             flasher::run_flash(
-                &mut fh_dev,
+                &mut qdl_dev,
                 program_file_paths,
                 patch_file_paths,
                 verbose_flasher,
@@ -322,7 +322,7 @@ fn main() -> Result<()> {
         }
         Command::Nop => println!(
             "Your nop was {}",
-            firehose_nop(&mut fh_dev)
+            firehose_nop(&mut qdl_dev)
                 .map(|_| "successful".bright_green())
                 .map_err(|_| "unsuccessful".bright_red())
                 .unwrap()
@@ -332,10 +332,10 @@ fn main() -> Result<()> {
             let file_len_sectors = file
                 .metadata()?
                 .len()
-                .div_ceil(fh_dev.fh_cfg.storage_sector_size as u64);
+                .div_ceil(qdl_dev.fh_cfg.storage_sector_size as u64);
 
             firehose_program_storage(
-                &mut fh_dev,
+                &mut qdl_dev,
                 &mut file,
                 "",
                 file_len_sectors as usize,
@@ -343,20 +343,20 @@ fn main() -> Result<()> {
                 "0",
             )?;
         }
-        Command::Peek { base, len } => firehose_peek(&mut fh_dev, base, len)?,
-        Command::PrintGpt => print_partition_table(&mut fh_dev, args.phys_part_idx)?,
-        Command::SetBootablePart { idx } => firehose_set_bootable(&mut fh_dev, idx)?,
+        Command::Peek { base, len } => firehose_peek(&mut qdl_dev, base, len)?,
+        Command::PrintGpt => print_partition_table(&mut qdl_dev, args.phys_part_idx)?,
+        Command::SetBootablePart { idx } => firehose_set_bootable(&mut qdl_dev, idx)?,
         Command::Write {
             part_name,
             file_path,
         } => {
             let part: gptman::GPTPartitionEntry =
-                find_part(&mut fh_dev, &part_name, args.phys_part_idx)?;
+                find_part(&mut qdl_dev, &part_name, args.phys_part_idx)?;
             let mut file = File::open(file_path)?;
             let file_len_sectors = file
                 .metadata()?
                 .len()
-                .div_ceil(fh_dev.fh_cfg.storage_sector_size as u64);
+                .div_ceil(qdl_dev.fh_cfg.storage_sector_size as u64);
             let part_len_sectors = part.ending_lba - part.starting_lba + 1;
 
             if file_len_sectors > part_len_sectors {
@@ -369,7 +369,7 @@ fn main() -> Result<()> {
             }
 
             firehose_program_storage(
-                &mut fh_dev,
+                &mut qdl_dev,
                 &mut file,
                 &part_name,
                 file_len_sectors as usize,
@@ -380,8 +380,8 @@ fn main() -> Result<()> {
     };
 
     // Finally, reset the device
-    fh_dev.reset_on_drop = false;
-    firehose_reset(&mut fh_dev, &reset_mode, 0)?;
+    qdl_dev.reset_on_drop = false;
+    firehose_reset(&mut qdl_dev, &reset_mode, 0)?;
 
     println!(
         "{} {}",
