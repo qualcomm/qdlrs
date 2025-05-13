@@ -18,6 +18,8 @@ use serde::{self, Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use strum::{EnumIter, IntoEnumIterator};
 
+use crate::types::{FirehoseChan, QdlBackend};
+
 const SAHARA_STATUS_SUCCESS: u32 = 0;
 
 #[derive(Copy, Clone, Debug, PartialEq, Deserialize_repr, Serialize_repr)]
@@ -387,7 +389,7 @@ pub fn sahara_get_ramdump_tbl<T: Read + Write>(
     Ok(tbl)
 }
 
-fn sahara_dump_region<T: Read + Write>(
+fn sahara_dump_region<T: Read + Write + FirehoseChan>(
     channel: &mut T,
     entry: RamdumpTable64,
     output: &mut impl Write,
@@ -418,6 +420,12 @@ fn sahara_dump_region<T: Read + Write>(
         channel.flush()?;
 
         bytes_read += channel.read(&mut buf)?;
+
+        // Issue a dummy read to consume the ZLP
+        if channel.fh_config().backend == QdlBackend::Usb && buf.len() % 512 == 0 {
+            let _ = channel.read(&mut []);
+        }
+
         pb.set(bytes_read as u64);
         let _ = output.write(&buf)?;
     }
@@ -425,7 +433,7 @@ fn sahara_dump_region<T: Read + Write>(
     Ok(())
 }
 
-pub fn sahara_dump_regions<T: Read + Write>(
+pub fn sahara_dump_regions<T: Read + Write + FirehoseChan>(
     channel: &mut T,
     dump_tbl: Vec<RamdumpTable64>,
     regions_to_dump: Vec<String>,
@@ -473,7 +481,7 @@ pub fn sahara_dump_regions<T: Read + Write>(
     Ok(())
 }
 
-pub fn sahara_run<T: Read + Write>(
+pub fn sahara_run<T: Read + Write + FirehoseChan>(
     channel: &mut T,
     sahara_mode: SaharaMode,
     sahara_command: Option<SaharaCmdModeCmd>,
