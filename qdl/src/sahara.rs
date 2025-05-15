@@ -18,6 +18,8 @@ use serde::{self, Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use strum::{EnumIter, IntoEnumIterator};
 
+use crate::types::{QdlBackend, QdlChan};
+
 const SAHARA_STATUS_SUCCESS: u32 = 0;
 
 #[derive(Copy, Clone, Debug, PartialEq, Deserialize_repr, Serialize_repr)]
@@ -362,7 +364,7 @@ pub fn sahara_get_ramdump_tbl<T: Read + Write>(
     let mut tbl = Vec::<RamdumpTable64>::with_capacity(num_chunks);
 
     let mut buf = vec![0u8; len as usize];
-    let _ = channel.read(&mut buf)?;
+    channel.read_exact(&mut buf)?;
 
     if verbose {
         println!("Available images:");
@@ -372,10 +374,14 @@ pub fn sahara_get_ramdump_tbl<T: Read + Write>(
         tbl.push(entry);
         if verbose {
             println!(
-                "\t{} (0x{:x} @ 0x{:x})",
+                "\t{} (0x{:x} @ 0x{:x}){}",
                 String::from_utf8(entry.filename.to_vec())?,
                 entry.len,
-                entry.base
+                entry.base,
+                match entry.save_pref {
+                    0 => "",
+                    _ => " *",
+                }
             );
         }
     }
@@ -383,7 +389,7 @@ pub fn sahara_get_ramdump_tbl<T: Read + Write>(
     Ok(tbl)
 }
 
-fn sahara_dump_region<T: Read + Write>(
+fn sahara_dump_region<T: Read + Write + QdlChan>(
     channel: &mut T,
     entry: RamdumpTable64,
     output: &mut impl Write,
@@ -414,6 +420,12 @@ fn sahara_dump_region<T: Read + Write>(
         channel.flush()?;
 
         bytes_read += channel.read(&mut buf)?;
+
+        // Issue a dummy read to consume the ZLP
+        if channel.fh_config().backend == QdlBackend::Usb && buf.len() % 512 == 0 {
+            let _ = channel.read(&mut []);
+        }
+
         pb.set(bytes_read as u64);
         let _ = output.write(&buf)?;
     }
@@ -421,7 +433,7 @@ fn sahara_dump_region<T: Read + Write>(
     Ok(())
 }
 
-pub fn sahara_dump_regions<T: Read + Write>(
+pub fn sahara_dump_regions<T: Read + Write + QdlChan>(
     channel: &mut T,
     dump_tbl: Vec<RamdumpTable64>,
     regions_to_dump: Vec<String>,
@@ -433,9 +445,13 @@ pub fn sahara_dump_regions<T: Read + Write>(
         .collect::<Vec<String>>();
 
     std::fs::create_dir_all("ramdump/")?;
-    let filtered_list = match regions_to_dump.len() {
-        // Dump everything if no argument was provided
-        0 => dump_tbl,
+    let filtered_list: Vec<RamdumpTable64> = match regions_to_dump.len() {
+        // Dump everything with save_pref == true if no argument was provided
+        0 => dump_tbl
+            .iter()
+            .filter(|e| e.save_pref != 0)
+            .copied()
+            .collect(),
         _ => dump_tbl
             .iter()
             .filter(|dump_entry| {
@@ -465,7 +481,7 @@ pub fn sahara_dump_regions<T: Read + Write>(
     Ok(())
 }
 
-pub fn sahara_run<T: Read + Write>(
+pub fn sahara_run<T: Read + Write + QdlChan>(
     channel: &mut T,
     sahara_mode: SaharaMode,
     sahara_command: Option<SaharaCmdModeCmd>,

@@ -5,9 +5,9 @@ use gptman::{self, GPT, GPTHeader, GPTPartitionEntry};
 use owo_colors::OwoColorize;
 use std::io::{Cursor, Error, ErrorKind, Read, Seek, Write};
 
-use qdl::{self, firehose_read_storage, types::FirehoseChan};
+use qdl::{self, firehose_read_storage, types::QdlChan};
 
-pub fn read_gpt_from_storage<T: Read + Write + FirehoseChan>(
+pub fn read_gpt_from_storage<T: Read + Write + QdlChan>(
     channel: &mut T,
     phys_part_idx: u8,
 ) -> Result<GPT> {
@@ -35,7 +35,7 @@ pub fn read_gpt_from_storage<T: Read + Write + FirehoseChan>(
     GPT::read_from(&mut buf, channel.fh_config().storage_sector_size as u64).map_err(|e| e.into())
 }
 
-pub fn find_part<T: Read + Write + FirehoseChan>(
+pub fn find_part<T: Read + Write + QdlChan>(
     channel: &mut T,
     name: &str,
     phys_part_idx: u8,
@@ -49,7 +49,7 @@ pub fn find_part<T: Read + Write + FirehoseChan>(
     }
 }
 
-pub fn print_partition_table<T: Read + Write + FirehoseChan>(
+pub fn print_partition_table<T: Read + Write + QdlChan>(
     channel: &mut T,
     phys_part_idx: u8,
 ) -> Result<()> {
@@ -74,7 +74,7 @@ pub fn print_partition_table<T: Read + Write + FirehoseChan>(
     Ok(())
 }
 
-pub fn read_storage_logical_partition<T: Read + Write + FirehoseChan>(
+pub fn read_storage_logical_partition<T: Read + Write + QdlChan>(
     channel: &mut T,
     out: &mut impl Write,
     name: &str,

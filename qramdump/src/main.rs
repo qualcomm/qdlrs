@@ -7,9 +7,9 @@ use anyhow::{Result, bail};
 use clap::{Parser, command};
 use qdl::{
     self,
-    sahara::{SaharaMode, sahara_run},
+    sahara::{SaharaMode, sahara_reset, sahara_run},
     setup_target_device,
-    types::{FirehoseConfiguration, FirehoseDevice, QdlBackend},
+    types::{FirehoseConfiguration, QdlBackend, QdlDevice},
 };
 
 #[derive(Parser, Debug)]
@@ -44,20 +44,22 @@ pub fn main() -> Result<()> {
         Err(e) => bail!("Couldn't set up device: {}", e.to_string()),
     };
 
-    let mut fh_dev = FirehoseDevice {
+    let mut qdl_dev = QdlDevice {
         rw: rw_channel.as_mut(),
         fh_cfg: FirehoseConfiguration::default(),
         reset_on_drop: false,
     };
 
     sahara_run(
-        &mut fh_dev,
+        &mut qdl_dev,
         SaharaMode::MemoryDebug,
         None,
         &mut [],
         args.regions_to_dump,
         args.verbose_sahara,
     )?;
+
+    sahara_reset(&mut qdl_dev)?;
 
     Ok(())
 }
