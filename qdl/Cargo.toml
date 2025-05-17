@@ -28,7 +28,6 @@ rusb = { version = "0.9.4", optional = true }
 serde = { version = "1.0.210", features = ["derive"] }
 serde_repr = "0.1.19"
 serial2 = { version = "0.2.28", optional = true }
-strum = { version = "0.26.3", features = ["derive"] }
 xmltree = { version = "0.11.0", features = ["attribute-order"] }
 
 [features]

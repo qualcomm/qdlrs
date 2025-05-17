@@ -16,7 +16,6 @@ use anyhow::{Result, bail};
 use bincode::serialize;
 use serde::{self, Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use strum::{EnumIter, IntoEnumIterator};
 
 use crate::types::{QdlBackend, QdlChan};
 
@@ -40,7 +39,7 @@ pub enum SaharaCmdModeCmd {
 }
 
 // (De)serialize_repr works on C-like enums (match by value instead of entry index)
-#[derive(Copy, Clone, Debug, PartialEq, EnumIter, Deserialize_repr, Serialize_repr)]
+#[derive(Copy, Clone, Debug, PartialEq, Deserialize_repr, Serialize_repr)]
 #[repr(u32)]
 pub enum SaharaCmd {
     SaharaHello = 0x1,      /* Device sends HELLO at init */
@@ -603,11 +602,9 @@ pub fn sahara_run<T: Read + Write + QdlChan>(
 }
 
 fn sahara_parse_packet(buf: &[u8], verbose: bool) -> SaharaPacket {
-    let raw_cmd = get_u32(&buf[0..4]) as usize;
+    let cmd = bincode::deserialize::<SaharaCmd>(&buf[0..4])
+        .unwrap_or_else(|_| panic!("Got unknown command {}", get_u32(&buf[0..4])));
 
-    let cmd = SaharaCmd::iter()
-        .nth(raw_cmd - 1 /* The first command = 0x1.. */)
-        .unwrap_or_else(|| panic!("Got unknown command {}", raw_cmd));
     let ret = SaharaPacket {
         cmd,
         len: get_u32(&buf[4..8]),
