@@ -147,6 +147,7 @@ pub enum FirehoseStorageType {
     Ufs,
     Nand,
     Nvme,
+    Spinor,
 }
 
 impl FromStr for FirehoseStorageType {
@@ -158,6 +159,7 @@ impl FromStr for FirehoseStorageType {
             "ufs" => Ok(FirehoseStorageType::Ufs),
             "nand" => Ok(FirehoseStorageType::Nand),
             "nvme" => Ok(FirehoseStorageType::Nvme),
+            "spinor" => Ok(FirehoseStorageType::Spinor),
             _ => bail!("Unknown storage type"),
         }
     }
@@ -170,6 +172,7 @@ impl Display for FirehoseStorageType {
             FirehoseStorageType::Ufs => write!(f, "ufs"),
             FirehoseStorageType::Nand => write!(f, "nand"),
             FirehoseStorageType::Nvme => write!(f, "nvme"),
+            FirehoseStorageType::Spinor => write!(f, "spinor"),
         }
     }
 }
