@@ -280,6 +280,11 @@ fn main() -> Result<()> {
             let outpath = Path::new(&outdir);
 
             for (_, p) in read_gpt_from_storage(&mut qdl_dev, args.phys_part_idx)?.iter() {
+                // *sigh*
+                if p.partition_name.as_str().is_empty() || p.size()? == 0 {
+                    continue;
+                }
+
                 let mut out = File::create(outpath.join(p.partition_name.to_string()))?;
                 read_storage_logical_partition(
                     &mut qdl_dev,
