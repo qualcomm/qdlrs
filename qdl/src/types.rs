@@ -56,9 +56,9 @@ pub struct FirehoseConfiguration {
     pub storage_sector_size: usize,
     pub storage_type: FirehoseStorageType,
 
+    pub bypass_storage: bool,
     pub hash_packets: bool,
     pub read_back_verify: bool,
-    pub skip_write: bool,
 
     pub backend: QdlBackend,
     pub skip_usb_zlp: bool,
@@ -74,9 +74,9 @@ impl Default for FirehoseConfiguration {
             xml_buf_size: 4096,
             storage_sector_size: 512,
             storage_type: FirehoseStorageType::Emmc,
+            bypass_storage: true,
             hash_packets: false,
             read_back_verify: false,
-            skip_write: true,
             backend: QdlBackend::default(),
             // https://github.com/libusb/libusb/pull/678
             skip_usb_zlp: cfg!(target_os = "macos"),

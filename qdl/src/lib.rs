@@ -227,7 +227,7 @@ pub fn firehose_configure<T: Read + Write + QdlChan>(
             ("AckRawDataEveryNumPackets", "0"), // TODO: (low prio)
             (
                 "SkipWrite",
-                &(channel.fh_config().skip_write as u32).to_string(),
+                &(channel.fh_config().bypass_storage as u32).to_string(),
             ),
             ("SkipStorageInit", &(skip_storage_init as u32).to_string()),
             ("MemoryName", &config.storage_type.to_string()),

@@ -104,6 +104,10 @@ struct Args {
     #[arg(long, value_name = "usb/serial")]
     backend: Option<String>,
 
+    /// Accept storage r/w operations, but make them never actually execute (useful for testing USB throughput)
+    #[arg(long, default_value = "false")]
+    bypass_storage: bool,
+
     #[arg(short, long, help = "E.g. COM4 on Windows")]
     dev_path: Option<String>,
 
@@ -146,9 +150,6 @@ struct Args {
 
     #[arg(long)]
     sector_size: Option<usize>,
-
-    #[arg(long, default_value = "false")]
-    skip_write: bool,
 
     #[arg(
         long,
@@ -210,7 +211,7 @@ fn main() -> Result<()> {
                     }
                 }
             },
-            skip_write: args.skip_write,
+            bypass_storage: args.bypass_storage,
             backend,
             skip_firehose_log: !args.print_firehose_log,
             verbose_firehose: args.verbose_firehose,
