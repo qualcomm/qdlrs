@@ -227,7 +227,7 @@ pub fn firehose_configure<T: Read + Write + QdlChan>(
             ("AckRawDataEveryNumPackets", "0"), // TODO: (low prio)
             (
                 "SkipWrite",
-                &(channel.fh_config().skip_write as u32).to_string(),
+                &(channel.fh_config().bypass_storage as u32).to_string(),
             ),
             ("SkipStorageInit", &(skip_storage_init as u32).to_string()),
             ("MemoryName", &config.storage_type.to_string()),
@@ -565,8 +565,9 @@ pub fn firehose_set_bootable<T: Read + Write + QdlChan>(
 pub fn firehose_get_default_sector_size(t: &str) -> Option<usize> {
     match FirehoseStorageType::from_str(t).unwrap() {
         FirehoseStorageType::Emmc => Some(512),
+        FirehoseStorageType::Nand => Some(4096),
         FirehoseStorageType::Nvme => Some(512),
         FirehoseStorageType::Ufs => Some(4096),
-        _ => None,
+        FirehoseStorageType::Spinor => Some(4096),
     }
 }

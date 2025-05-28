@@ -104,6 +104,10 @@ struct Args {
     #[arg(long, value_name = "usb/serial")]
     backend: Option<String>,
 
+    /// Accept storage r/w operations, but make them never actually execute (useful for testing USB throughput)
+    #[arg(long, default_value = "false")]
+    bypass_storage: bool,
+
     #[arg(short, long, help = "E.g. COM4 on Windows")]
     dev_path: Option<String>,
 
@@ -146,9 +150,6 @@ struct Args {
 
     #[arg(long)]
     sector_size: Option<usize>,
-
-    #[arg(long, default_value = "false")]
-    skip_write: bool,
 
     #[arg(
         long,
@@ -210,7 +211,7 @@ fn main() -> Result<()> {
                     }
                 }
             },
-            skip_write: args.skip_write,
+            bypass_storage: args.bypass_storage,
             backend,
             skip_firehose_log: !args.print_firehose_log,
             verbose_firehose: args.verbose_firehose,
@@ -279,6 +280,11 @@ fn main() -> Result<()> {
             let outpath = Path::new(&outdir);
 
             for (_, p) in read_gpt_from_storage(&mut qdl_dev, args.phys_part_idx)?.iter() {
+                // *sigh*
+                if p.partition_name.as_str().is_empty() || p.size()? == 0 {
+                    continue;
+                }
+
                 let mut out = File::create(outpath.join(p.partition_name.to_string()))?;
                 read_storage_logical_partition(
                     &mut qdl_dev,
