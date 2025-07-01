@@ -29,6 +29,8 @@ pub mod serial;
 pub mod types;
 #[cfg(feature = "usb")]
 pub mod usb;
+#[cfg(feature = "vip")]
+pub mod vip;
 
 pub fn setup_target_device(
     backend: QdlBackend,
@@ -48,7 +50,7 @@ pub fn setup_target_device(
 }
 
 /// Wrapper for easily creating Firehose-y XML packets
-fn firehose_xml_setup(op: &str, kvps: &[(&str, &str)]) -> anyhow::Result<Vec<u8>> {
+pub fn firehose_xml_setup(op: &str, kvps: &[(&str, &str)]) -> anyhow::Result<Vec<u8>> {
     let mut xml = Element::new("data");
     let mut op_node = Element::new(op);
     for kvp in kvps.iter() {
@@ -233,7 +235,7 @@ pub fn firehose_configure<T: Read + Write + QdlChan>(
             ("MemoryName", &config.storage_type.to_string()),
             ("AlwaysValidate", &(config.hash_packets as u32).to_string()),
             ("Verbose", &(config.verbose_firehose as u32).to_string()),
-            ("MaxDigestTableSizeInBytes", "8192"), // TODO: (low prio)
+            ("MaxDigestTableSizeInBytes", "8192"),
             (
                 "MaxPayloadSizeToTargetInBytes",
                 &config.send_buffer_size.to_string(),
