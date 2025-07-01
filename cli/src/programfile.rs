@@ -121,9 +121,7 @@ fn parse_program_cmd<T: Read + Write + QdlChan>(
 
     let label = attrs.get("label").unwrap();
     if num_sectors == 0 {
-        if verbose {
-            println!("Skipping 0-length entry for {}", label);
-        }
+        println!("Skipping 0-length entry for {}", label);
         return Ok(());
     }
     if BOOTABLE_PART_NAMES.contains(&&label[..]) {
