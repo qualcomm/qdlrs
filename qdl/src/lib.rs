@@ -96,15 +96,14 @@ pub fn firehose_read<T: Read + Write + QdlChan>(
 
         got_any_data = true;
 
-        let xml_declaration = r#"<?xml version="1.0" encoding="UTF-8" ?>"#;
-        let xml_fragments: Vec<&str> = str::from_utf8(&buf[..bytes_read])?
-            .split(xml_declaration)
-            .filter(|s| !s.is_empty())
+        let xml_fragments_indices: Vec<_> = str::from_utf8(&buf[..bytes_read])?
+            .match_indices("<?xml")
+            .map(|s| s.0)
             .collect();
 
-        for fragment in xml_fragments.iter() {
-            let full_xml_string = format!("{}{}", xml_declaration, fragment);
-            let xml = xmltree::Element::parse(full_xml_string.as_bytes())?;
+        for chunk in xml_fragments_indices.chunks(2) {
+            let end = if chunk.len() == 1 {bytes_read} else {chunk[1]};
+            let xml = xmltree::Element::parse(&buf[chunk[0]..end])?;
 
             if xml.name != "data" {
                 // TODO: define a more verbose level
@@ -113,7 +112,7 @@ pub fn firehose_read<T: Read + Write + QdlChan>(
                 }
                 bail!("Got a firehose packet without a data tag");
             }
-        
+
             // The spec expects there's always a single node only
             if let Some(XMLNode::Element(e)) = xml.children.first() {
                 // Check for a 'log' node and print out the message
