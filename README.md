@@ -51,8 +51,8 @@ Options:
 
       --hash-packets
           Validate every packet. Slow.
-      --phys-part-idx <PHYS_PART_IDX>
-          [default: 0]
+  -L, --phys-part-idx <PHYS_PART_IDX>
+          e.g. LUN index for UFS [default: 0]
       --print-firehose-log
 
       --read-back-verify
