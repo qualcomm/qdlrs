@@ -117,7 +117,12 @@ struct Args {
     #[arg(long, default_value = "false", help = "Validate every packet. Slow.")]
     hash_packets: bool,
 
-    #[arg(long, default_value = "0")]
+    #[arg(
+        short = 'L',
+        long,
+        default_value = "0",
+        help = "e.g. LUN index for UFS"
+    )]
     phys_part_idx: u8,
 
     #[arg(long, default_value = "false")]

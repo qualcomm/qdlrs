@@ -42,23 +42,41 @@ Commands:
 
 Options:
       --backend <usb/serial>
-  -d, --dev-path <DEV_PATH>                E.g. COM4 on Windows
+
+      --bypass-storage
+          Accept storage r/w operations, but make them never actually execute (useful for testing USB throughput)
+  -d, --dev-path <DEV_PATH>
+          E.g. COM4 on Windows
   -l, --loader-path <FILE>
-      --hash-packets                       Validate every packet. Slow.
-      --phys-part-idx <PHYS_PART_IDX>      [default: 0]
+
+      --hash-packets
+          Validate every packet. Slow.
+  -L, --phys-part-idx <PHYS_PART_IDX>
+          e.g. LUN index for UFS [default: 0]
       --print-firehose-log
-      --read-back-verify                   Every <program> operation is read back. VERY SLOW!
-      --reset-mode <edl/off/system>        [default: edl]
+
+      --read-back-verify
+          Every <program> operation is read back. VERY SLOW!
+      --reset-mode <edl/off/system>
+          [default: edl]
       --serial-no <SERIAL_NO>
-  -A, --skip-hello-wait                    Work around missing HELLO packet
+
+  -A, --skip-hello-wait
+          Work around missing HELLO packet
   -s, --storage-type <emmc/ufs/nvme/nand>
+
       --sector-size <SECTOR_SIZE>
-      --skip-write
-      --skip-storage-init                  Required for unprovisioned storage media.
+
+      --skip-storage-init
+          Required for unprovisioned storage media.
       --verbose-sahara
+
       --verbose-firehose
-  -h, --help                               Print help
-  -V, --version                            Print version
+
+  -h, --help
+          Print help
+  -V, --version
+          Print version
 ```
 
 </details>
