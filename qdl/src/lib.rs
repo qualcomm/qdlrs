@@ -130,7 +130,7 @@ pub fn firehose_read<T: Read + Write + QdlChan>(
             // DEBUG: "print out incoming packets"
             // TODO: define a more verbose level
             if channel.fh_config().verbose_firehose {
-                println!("RECV: {}", format!("{:?}", e).magenta());
+                println!("RECV: {}", format!("{e:?}").magenta());
             }
 
             // TODO: Use std::intrinsics::unlikely after it exits nightly
@@ -181,7 +181,7 @@ pub fn firehose_write_getack<T: Read + Write + QdlChan>(
         Ok(FirehoseStatus::Nak) => {
             // Assume FH will hang after NAK..
             firehose_reset(channel, &FirehoseResetMode::ResetToEdl, 0)?;
-            Err(anyhow::Error::msg(format!("Couldn't {}", couldnt_what)))
+            Err(anyhow::Error::msg(format!("Couldn't {couldnt_what}")))
         }
         Err(e) => Err(e),
     }
@@ -320,7 +320,7 @@ pub fn firehose_peek<T: Read + Write + QdlChan>(
         ],
     )?;
 
-    firehose_write_getack(channel, &mut xml, format!("peek @ {:#x}", addr))
+    firehose_write_getack(channel, &mut xml, format!("peek @ {addr:#x}"))
 }
 
 /// Poke at memory
@@ -342,7 +342,7 @@ pub fn firehose_poke<T: Read + Write + QdlChan>(
         ],
     )?;
 
-    firehose_write_getack(channel, &mut xml, format!("peek @ {:#x}", addr))
+    firehose_write_getack(channel, &mut xml, format!("peek @ {addr:#x}"))
 }
 
 /// Write to Device storage
@@ -380,7 +380,7 @@ pub fn firehose_program_storage<T: Read + Write + QdlChan>(
 
     let mut pb = ProgressBar::new((sectors_left * channel.fh_config().storage_sector_size) as u64);
     pb.show_time_left = true;
-    pb.message(&format!("Sending partition {}: ", label));
+    pb.message(&format!("Sending partition {label}: "));
     pb.set_units(Units::Bytes);
 
     while sectors_left > 0 {
@@ -558,7 +558,7 @@ pub fn firehose_set_bootable<T: Read + Write + QdlChan>(
     firehose_write_getack(
         channel,
         &mut xml,
-        format!("set partition {} as bootable", drive_idx),
+        format!("set partition {drive_idx} as bootable"),
     )
 }
 

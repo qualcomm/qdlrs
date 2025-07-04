@@ -57,10 +57,7 @@ fn parse_patch_cmd<T: Read + Write + QdlChan>(
 ) -> anyhow::Result<()> {
     if let Some(filename) = attrs.get("filename") {
         if filename != "DISK" && verbose {
-            println!(
-                "Skipping <patch> tag trying to alter {} on Host filesystem",
-                filename
-            );
+            println!("Skipping <patch> tag trying to alter {filename} on Host filesystem");
             return Ok(());
         }
     } else {
@@ -121,7 +118,7 @@ fn parse_program_cmd<T: Read + Write + QdlChan>(
 
     let label = attrs.get("label").unwrap();
     if num_sectors == 0 {
-        println!("Skipping 0-length entry for {}", label);
+        println!("Skipping 0-length entry for {label}");
         return Ok(());
     }
     if BOOTABLE_PART_NAMES.contains(&&label[..]) {
@@ -133,7 +130,7 @@ fn parse_program_cmd<T: Read + Write + QdlChan>(
     if allow_missing_files {
         if filename.is_empty() {
             if verbose {
-                println!("Skipping bogus entry for {}", label);
+                println!("Skipping bogus entry for {label}");
             }
             return Ok(());
         } else if !file_path.exists() {
