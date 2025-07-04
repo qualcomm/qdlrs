@@ -237,7 +237,7 @@ fn main() -> Result<()> {
         args.verbose_sahara,
     )?;
     let sn = u32::from_le_bytes([sn[0], sn[1], sn[2], sn[3]]);
-    println!("Chip serial number: 0x{:x}", sn);
+    println!("Chip serial number: 0x{sn:x}");
 
     let key_hash = sahara_run(
         &mut qdl_dev,
