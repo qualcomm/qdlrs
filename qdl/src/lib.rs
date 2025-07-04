@@ -102,8 +102,9 @@ pub fn firehose_read<T: Read + Write + QdlChan>(
             .collect();
 
         for chunk in xml_fragments_indices.chunks(2) {
-            let end = if chunk.len() == 1 {bytes_read} else {chunk[1]};
-            let xml = xmltree::Element::parse(&buf[chunk[0]..end])?;
+            let start = chunk[0];
+            let end = *chunk.get(1).unwrap_or(&bytes_read);
+            let xml = xmltree::Element::parse(&buf[start..end])?;
 
             if xml.name != "data" {
                 // TODO: define a more verbose level
