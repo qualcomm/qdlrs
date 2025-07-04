@@ -12,11 +12,18 @@ qramdump/ - Tool to receive memory dumps from a crashed device
 ```
 
 ## Building
-Run `cargo build [--release]` to build all executables within this repo.
+You're expected to have a recent installation of Rust. You can acquire one with [rustup](https://rustup.rs).
+</br>If you already have an older installation, try `rustup update`.
 
-Use `cargo run [--release] --bin <executable_name> [-- extra_args]` to quickly build one of the programs from source and run it.
+Run `cargo build [--release]` to build all executables within this repo. The binaries will appear in `target/debug/` or `target/release`, respectively.
 
-## Running qdl
+Use `cargo run [--release] --bin <qdl-rs/qramdump> [-- args]` to quickly build one of the programs from source and run it.
+
+## Running the programs
+<details>
+
+<summary>qdl-rs</summary>
+
 ```
 Usage: qdl-rs [OPTIONS] --loader-path <FILE> --storage-type <emmc/ufs/nvme/nand> <COMMAND>
 
@@ -54,7 +61,12 @@ Options:
   -V, --version                            Print version
 ```
 
-## Running qramdump
+</details>
+
+<details>
+
+<summary>qramdump</summary>
+
 ```
 Usage: qramdump [OPTIONS] [REGIONS_TO_DUMP]...
 
@@ -70,20 +82,108 @@ Options:
   -V, --version                Print version
 ```
 
+</details>
+
 ### Windows
 You'll need to acquire an appropriate driver that exposes the device as a USB serial port, or use [WinUSB](https://learn.microsoft.com/en-us/windows-hardware/drivers/usbcon/winusb-installation).
 
 Serial is used as the default backend on this platform.
 
-## Flashing a full META image
+### Loader filename on newer platforms
+Some newer platforms (e.g. SM8750) require that a file called `xbl_s_devprg_ns.melf` is used instead of `prog_firehose_ddr.elf`. This change may be opaque to you if the file has been renamed as part of the binary delivery process.
+
+### LUN handling
+Due to how the protocol is constructed, particularly when interfacing with UFS, you ***must*** specify the LUN (physical storage partition) index on which you want to operate. This does not concern the `flasher` command (rawproramN.xml files include that information) and operations that aren't storage-related (e.g. `peek` or `nop`).
+
+## Common usage examples
+
+<details>
+<summary>Flash a full META image</summary>
+  
 ### Example with UFS as primary storage, reboots to OS after flashing ends
 ```
-qdl-rs -l prog_firehose_ddr.elf -s ufs [--serial-no abcd1234] --reset-mode system flasher -p rawprogram*.xml -x patch*.xml
+qdl-rs -l prog_firehose_ddr.elf -s ufs --reset-mode system flasher -p rawprogram*.xml -x patch*.xml
 ```
+
+</details>
+
+<details>
+<summary>Dump the entire physical storage partition (e.g. LUN)</summary>
+  
+```
+qdl-rs -l prog_firehose_ddr.elf -s ufs --phys-part-idx 2 dump -o lun2/
+```
+
+</details>
+
+<details>
+
+<summary>Fetch a single partition from LUN2</summary>
+
+```
+qdl-rs -l prog_firehose_ddr.elf -s ufs --phys-part-idx 2 dump-part EFI
+```
+
+</details>
+
+<details>
+
+<summary>Overwrite a single partition on LUN0</summary>
+
+```
+qdl-rs -l prog_firehose_ddr.elf -s ufs --phys-part-idx 0 write boot boot.img
+```
+
+</details>
+
+<details>
+
+<summary>Print out the partition table on LUN4</summary>
+
+```
+qdl-rs -l prog_firehose_ddr.elf -s ufs --phys-part-idx 4 print-gpt
+```
+
+</details>
+
+<details>
+
+<summary>Overwrite the entirety of LUN7 (VERY dangerous, may remove device-unique data)</summary>
+
+```
+qdl-rs -l prog_firehose_ddr.elf -s ufs --phys-part-idx 7 overwrite-storage lun7_dump.img
+```
+
+</details>
+
+<details>
+  
+<summary>Erase a partition on eMMC (VERY dangerous, may remove device-unique data)</summary>
+
+```
+qdl-rs -l prog_firehose_ddr.elf -s emmc erase boot
+```
+
+</details>
+
+<details>
+
+<summary>Set LUN2 as bootable (i.e. containing xbl)</summary>
+
+```
+qdl-rs -l prog_firehose_ddr.elf -s ufs set-bootable-part 2
+```
+
+</details>
 
 ## Documentation
 
 Run `cargo doc --open` to generate and open the latest rustdoc. Learn more [here](https://doc.rust-lang.org/cargo/commands/cargo-doc.html).
+
+## Contributing
+
+See [`CONTRIBUTING.md`](/CONTRIBUTING.md).
+Your code is expected to pass `cargo fmt` and `cargo clippy` checks - the CI will be on the lookout for that.
 
 ## License
 
