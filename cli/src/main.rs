@@ -43,10 +43,10 @@ enum Command {
 
     /// Invoke the flasher
     Flasher {
-        #[arg(short, long, num_args = 1..=10, value_name = "FILE")]
+        #[arg(short, long, num_args = 1..=128, value_name = "FILE")]
         program_file_paths: Vec<String>,
 
-        #[arg(short = 'x', long, num_args = 0..=10, value_name = "FILE")]
+        #[arg(short = 'x', long, num_args = 0..=128, value_name = "FILE")]
         patch_file_paths: Vec<String>,
 
         #[arg(long, default_value = "false")]
