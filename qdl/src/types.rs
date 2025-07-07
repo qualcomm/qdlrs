@@ -8,6 +8,7 @@ use std::{
 
 use anyhow::{Error, bail};
 use owo_colors::OwoColorize;
+use sha2::Digest;
 
 use crate::firehose_reset;
 
@@ -96,6 +97,8 @@ pub trait QdlReadWrite: Read + Write {}
 pub struct QdlDevice<'a> {
     pub rw: &'a mut dyn QdlReadWrite,
     pub fh_cfg: FirehoseConfiguration,
+    pub vip_digest_table: Vec<u8>,
+    pub fh_packet_counter: usize,
     pub reset_on_drop: bool,
 }
 
@@ -107,7 +110,13 @@ impl Read for QdlDevice<'_> {
 
 impl Write for QdlDevice<'_> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.rw.write(buf)
+        let ret = self.rw.write(buf);
+        if ret.is_ok() {
+            self.fh_packet_counter += 1;
+            self.write_next_hash()?;
+        }
+
+        ret
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
@@ -122,6 +131,26 @@ impl QdlChan for QdlDevice<'_> {
 
     fn mut_fh_config(&mut self) -> &mut FirehoseConfiguration {
         &mut self.fh_cfg
+    }
+}
+
+impl QdlDevice<'_> {
+    fn write_next_hash(&mut self) -> std::io::Result<usize> {
+        // Hashes 0..53 come from the MBN image
+        if self.fh_packet_counter >= 54 && !self.vip_digest_table.is_empty() {
+            let buf = match self
+                .vip_digest_table
+                .chunks(sha2::Sha256::output_size())
+                .nth(self.fh_packet_counter - 54)
+            {
+                Some(b) => Ok(b),
+                None => Err(std::io::Error::other("Faulty VIP chained table!")),
+            }?;
+
+            return self.rw.write(buf);
+        }
+
+        Ok(0)
     }
 }
 

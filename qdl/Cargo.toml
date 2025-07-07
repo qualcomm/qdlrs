@@ -8,7 +8,7 @@ license = "BSD-3-Clause"
 readme = "README.md"
 repository = "https://github.com/qualcomm/qdlrs"
 categories = ["embedded"]
-publish = false # TODO
+publish = false                                  # TODO
 
 [badges]
 maintenance = { status = "actively-developed" }
@@ -28,8 +28,10 @@ rusb = { version = "0.9.4", optional = true }
 serde = { version = "1.0.210", features = ["derive"] }
 serde_repr = "0.1.19"
 serial2 = { version = "0.2.28", optional = true }
+sha2 = { version = "0.10.9", optional = true }
 xmltree = { version = "0.11.0", features = ["attribute-order"] }
 
 [features]
 serial = ["dep:serial2"]
 usb = ["dep:rusb"]
+vip = ["dep:sha2"]
