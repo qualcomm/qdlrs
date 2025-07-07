@@ -9,7 +9,7 @@ use serial::setup_serial_device;
 use std::cmp::min;
 use std::io::Read;
 use std::io::Write;
-use std::str::FromStr;
+use std::str::{self, FromStr};
 use types::FirehoseResetMode;
 use types::FirehoseStatus;
 use types::FirehoseStorageType;
@@ -96,54 +96,62 @@ pub fn firehose_read<T: Read + Write + QdlChan>(
 
         got_any_data = true;
 
-        // Assume we only get one XML per transfer
-        let xml = xmltree::Element::parse(&buf[..bytes_read])?;
+        let xml_fragments_indices: Vec<_> = str::from_utf8(&buf[..bytes_read])?
+            .match_indices("<?xml")
+            .map(|s| s.0)
+            .collect();
 
-        if xml.name != "data" {
-            // TODO: define a more verbose level
-            if channel.fh_config().verbose_firehose {
-                println!("{:?}", xml);
+        for chunk in xml_fragments_indices.chunks(2) {
+            let start = chunk[0];
+            let end = *chunk.get(1).unwrap_or(&bytes_read);
+            let xml = xmltree::Element::parse(&buf[start..end])?;
+
+            if xml.name != "data" {
+                // TODO: define a more verbose level
+                if channel.fh_config().verbose_firehose {
+                    println!("{:?}", xml);
+                }
+                bail!("Got a firehose packet without a data tag");
             }
-            bail!("Got a firehose packet without a data tag");
-        }
 
-        // The spec expects there's always a single node only
-        if let Some(XMLNode::Element(e)) = xml.children.first() {
-            // Check for a 'log' node and print out the message
-            if e.name == "log" {
-                if channel.fh_config().skip_firehose_log {
+            // The spec expects there's always a single node only
+            if let Some(XMLNode::Element(e)) = xml.children.first() {
+                // Check for a 'log' node and print out the message
+                if e.name == "log" {
+                    if channel.fh_config().skip_firehose_log {
+                        continue;
+                    }
+
+                    println!(
+                        "LOG: {}",
+                        e.attributes
+                            .get("value")
+                            .to_owned()
+                            .unwrap_or(&String::from("<garbage log data>"))
+                            .bright_black()
+                    );
+
                     continue;
                 }
 
-                println!(
-                    "LOG: {}",
-                    e.attributes
-                        .get("value")
-                        .to_owned()
-                        .unwrap_or(&String::from("<garbage log data>"))
-                        .bright_black()
-                );
+                // DEBUG: "print out incoming packets"
+                // TODO: define a more verbose level
+                if channel.fh_config().verbose_firehose {
+                    println!("RECV: {}", format!("{e:?}").magenta());
+                }
 
-                continue;
+                // TODO: Use std::intrinsics::unlikely after it exits nightly
+                if e.attributes.get("AttemptRetry").is_some() {
+                    return firehose_read::<T>(channel, response_parser);
+                } else if e.attributes.get("AttemptRestart").is_some() {
+                    // TODO: handle this automagically
+                    firehose_reset(channel, &FirehoseResetMode::ResetToEdl, 0)?;
+                    bail!("Firehose requested a restart. Run the program again.");
+                }
+
+                // Pass other nodes to specialized parsers
+                return response_parser(channel, &e.attributes);
             }
-
-            // DEBUG: "print out incoming packets"
-            // TODO: define a more verbose level
-            if channel.fh_config().verbose_firehose {
-                println!("RECV: {}", format!("{e:?}").magenta());
-            }
-
-            // TODO: Use std::intrinsics::unlikely after it exits nightly
-            if e.attributes.get("AttemptRetry").is_some() {
-                return firehose_read::<T>(channel, response_parser);
-            } else if e.attributes.get("AttemptRestart").is_some() {
-                // TODO: handle this automagically
-                firehose_reset(channel, &FirehoseResetMode::ResetToEdl, 0)?;
-                bail!("Firehose requested a restart. Run the program again.");
-            }
-
-            // Pass other nodes to specialized parsers
-            return response_parser(channel, &e.attributes);
         }
     }
 }
