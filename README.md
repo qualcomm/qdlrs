@@ -121,6 +121,10 @@ Due to how the protocol is constructed, particularly when interfacing with UFS, 
 ### Example with UFS as primary storage, reboots to OS after flashing ends
 ```
 qdl-rs -l prog_firehose_ddr.elf -s ufs --reset-mode system flasher -p rawprogram*.xml -x patch*.xml
+
+# NOTE: qdl-rs will flash anything you pass as a parameter. Some METAs ship a number of rawprogram0_foo.xml
+# files which may be undesirable (e.g. _WIPE_GPT). You can filter those out with e.g.:
+find /path/to/build/ -regex '.*/rawprogram[0-9]+\.xml$'
 ```
 
 </details>
