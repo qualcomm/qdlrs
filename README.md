@@ -36,6 +36,7 @@ Commands:
   overwrite-storage  Overwrite the storage physical partition contents with a raw image Similar to Flasher, but this one only takes a partition dump as input and performs no real validation on the input data
   peek               Peek at memory
   print-gpt          Print the GPT table
+  reset              Restart the device
   set-bootable-part  Mark physical storage partition as bootable
   write              Write a partition
   help               Print this message or the help of the given subcommand(s)
@@ -58,7 +59,7 @@ Options:
       --read-back-verify
           Every <program> operation is read back. VERY SLOW!
       --reset-mode <edl/off/system>
-          [default: edl]
+          WARNING: Will be deprecated in release v1.0.0 [default: edl]
       --serial-no <SERIAL_NO>
 
   -A, --skip-hello-wait
@@ -130,6 +131,15 @@ find /path/to/build/ -regex '.*/rawprogram[0-9]+\.xml$'
 </details>
 
 <details>
+<summary>Reboot the device back to the OS</summary>
+
+```
+qdl-rs -l prog_firehose_ddr.elf -s ufs reset system
+```
+
+</details>
+
+<details>
 <summary>Dump the entire physical storage partition (e.g. LUN)</summary>
   
 ```
@@ -139,7 +149,6 @@ qdl-rs -l prog_firehose_ddr.elf -s ufs --phys-part-idx 2 dump -o lun2/
 </details>
 
 <details>
-
 <summary>Fetch a single partition from LUN2</summary>
 
 ```
@@ -149,7 +158,6 @@ qdl-rs -l prog_firehose_ddr.elf -s ufs --phys-part-idx 2 dump-part EFI
 </details>
 
 <details>
-
 <summary>Overwrite a single partition on LUN0</summary>
 
 ```
@@ -159,7 +167,6 @@ qdl-rs -l prog_firehose_ddr.elf -s ufs --phys-part-idx 0 write boot boot.img
 </details>
 
 <details>
-
 <summary>Print out the partition table on LUN4</summary>
 
 ```
@@ -169,7 +176,6 @@ qdl-rs -l prog_firehose_ddr.elf -s ufs --phys-part-idx 4 print-gpt
 </details>
 
 <details>
-
 <summary>Overwrite the entirety of LUN7 (VERY dangerous, may remove device-unique data)</summary>
 
 ```
@@ -179,7 +185,6 @@ qdl-rs -l prog_firehose_ddr.elf -s ufs --phys-part-idx 7 overwrite-storage lun7_
 </details>
 
 <details>
-  
 <summary>Erase a partition on eMMC (VERY dangerous, may remove device-unique data)</summary>
 
 ```
@@ -189,7 +194,6 @@ qdl-rs -l prog_firehose_ddr.elf -s emmc erase boot
 </details>
 
 <details>
-
 <summary>Set LUN2 as bootable (i.e. containing xbl)</summary>
 
 ```

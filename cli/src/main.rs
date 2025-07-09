@@ -82,6 +82,12 @@ enum Command {
     /// Print the GPT table
     PrintGpt,
 
+    /// Restart the device
+    Reset {
+        #[arg(default_value = "system", value_name = "edl/off/system")]
+        reset_mode: String,
+    },
+
     /// Mark physical storage partition as bootable
     SetBootablePart {
         #[arg()]
@@ -135,6 +141,7 @@ struct Args {
     )]
     read_back_verify: bool,
 
+    /// WARNING: Will be deprecated in release v1.0.0
     #[arg(long, default_value = "edl", value_name = "edl/off/system")]
     reset_mode: String,
 
@@ -356,6 +363,9 @@ fn main() -> Result<()> {
         }
         Command::Peek { base, len } => firehose_peek(&mut qdl_dev, base, len)?,
         Command::PrintGpt => print_partition_table(&mut qdl_dev, args.phys_part_idx)?,
+        Command::Reset { reset_mode } => {
+            firehose_reset(&mut qdl_dev, &FirehoseResetMode::from_str(&reset_mode)?, 0)?
+        }
         Command::SetBootablePart { idx } => firehose_set_bootable(&mut qdl_dev, idx)?,
         Command::Write {
             part_name,
