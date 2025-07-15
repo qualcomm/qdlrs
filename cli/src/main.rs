@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use clap_num::maybe_hex;
 use itertools::Itertools;
@@ -18,6 +18,7 @@ use util::{
 };
 
 use std::fs::{self, File};
+use std::io::Write;
 use std::{path::Path, str::FromStr};
 
 mod flasher;
@@ -176,6 +177,12 @@ struct Args {
     #[arg(long, default_value = "false")]
     verbose_firehose: bool,
 
+    #[arg(short = 'M')]
+    vip_mbn_path: Option<String>,
+
+    #[arg(short = 'T')]
+    vip_aux_tbl_path: Option<String>,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -192,6 +199,25 @@ fn main() -> Result<()> {
     let mbn_loader = match fs::read(args.loader_path) {
         Ok(m) => m,
         Err(e) => bail!("Couldn't open the programmer binary: {}", e.to_string()),
+    };
+
+    let vip_mbn = match args.vip_mbn_path {
+        Some(p) => match fs::read(p) {
+            Ok(m) => Some(m),
+            Err(e) => bail!("Couldn't read the VIP MBN: {}", e.to_string()),
+        },
+        None => None,
+    };
+
+    let vip_aux = match args.vip_aux_tbl_path {
+        Some(p) => match fs::read(p) {
+            Ok(a) => a,
+            Err(e) => bail!(
+                "Couldn't read the VIP chained table file: {}",
+                e.to_string()
+            ),
+        },
+        None => vec![],
     };
 
     println!(
@@ -231,6 +257,8 @@ fn main() -> Result<()> {
             ..Default::default()
         },
         reset_on_drop: false,
+        vip_digest_table: vip_aux,
+        fh_packet_counter: 0,
     };
 
     // In case another program on the system has already consumed the HELLO packet,
@@ -276,6 +304,13 @@ fn main() -> Result<()> {
 
     // If we're past Sahara, activate the Firehose reset-on-drop listener
     qdl_dev.reset_on_drop = true;
+
+    // If VIP is used, the hash table must be sent first, even before <configure>
+    if let Some(vip_mbn) = vip_mbn {
+        qdl_dev
+            .write_all(&vip_mbn)
+            .with_context(|| "Couldn't load the VIP MBN")?;
+    }
 
     // Get any "welcome" logs
     firehose_read(&mut qdl_dev, firehose_parser_ack_nak)?;
