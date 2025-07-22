@@ -66,6 +66,8 @@ Options:
           Work around missing HELLO packet
   -s, --storage-type <emmc/ufs/nvme/nand>
 
+  -S, --storage-slot <STORAGE_SLOT>
+          Index of the physical device (e.g. 1 for secondary UFS) [default: 0]
       --sector-size <SECTOR_SIZE>
 
       --skip-storage-init

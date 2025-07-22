@@ -25,6 +25,7 @@ fn parse_read_cmd<T: Read + Write + QdlChan>(
         .unwrap()
         .parse::<usize>()
         .unwrap();
+    let slot = attrs.get("slot").map_or(0, |a| a.parse::<u8>().unwrap());
     let phys_part_idx = attrs
         .get("physical_partition_number")
         .unwrap()
@@ -45,6 +46,7 @@ fn parse_read_cmd<T: Read + Write + QdlChan>(
         channel,
         &mut outfile,
         num_sectors,
+        slot,
         phys_part_idx,
         start_sector,
     )
@@ -65,6 +67,7 @@ fn parse_patch_cmd<T: Read + Write + QdlChan>(
     }
 
     let byte_off = attrs.get("byte_offset").unwrap().parse::<u64>().unwrap();
+    let slot = attrs.get("slot").map_or(0, |a| a.parse::<u8>().unwrap());
     let phys_part_idx = attrs
         .get("physical_partition_number")
         .unwrap()
@@ -74,7 +77,15 @@ fn parse_patch_cmd<T: Read + Write + QdlChan>(
     let start_sector = attrs.get("start_sector").unwrap();
     let val = attrs.get("value").unwrap();
 
-    firehose_patch(channel, byte_off, phys_part_idx, size, start_sector, val)
+    firehose_patch(
+        channel,
+        byte_off,
+        slot,
+        phys_part_idx,
+        size,
+        start_sector,
+        val,
+    )
 }
 
 const BOOTABLE_PART_NAMES: [&str; 3] = ["xbl", "xbl_a", "sbl1"];
@@ -104,6 +115,7 @@ fn parse_program_cmd<T: Read + Write + QdlChan>(
         .unwrap()
         .parse::<usize>()
         .unwrap();
+    let slot = attrs.get("slot").map_or(0, |a| a.parse::<u8>().unwrap());
     let phys_part_idx = attrs
         .get("physical_partition_number")
         .unwrap()
@@ -151,6 +163,7 @@ fn parse_program_cmd<T: Read + Write + QdlChan>(
         &mut buf,
         label,
         num_sectors,
+        slot,
         phys_part_idx,
         start_sector,
     )
