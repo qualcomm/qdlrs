@@ -160,6 +160,14 @@ struct Args {
     #[arg(short, long, value_name = "emmc/ufs/nvme/nand")]
     storage_type: String,
 
+    #[arg(
+        short = 'S',
+        long,
+        default_value = "0",
+        help = "Index of the physical device (e.g. 1 for secondary UFS)"
+    )]
+    storage_slot: u8,
+
     #[arg(long)]
     sector_size: Option<usize>,
 
@@ -223,6 +231,7 @@ fn main() -> Result<()> {
                     }
                 }
             },
+            storage_slot: args.storage_slot,
             bypass_storage: args.bypass_storage,
             backend,
             skip_firehose_log: !args.print_firehose_log,
@@ -291,7 +300,9 @@ fn main() -> Result<()> {
             fs::create_dir_all(&outdir)?;
             let outpath = Path::new(&outdir);
 
-            for (_, p) in read_gpt_from_storage(&mut qdl_dev, args.phys_part_idx)?.iter() {
+            for (_, p) in
+                read_gpt_from_storage(&mut qdl_dev, args.storage_slot, args.phys_part_idx)?.iter()
+            {
                 // *sigh*
                 if p.partition_name.as_str().is_empty() || p.size()? == 0 {
                     continue;
@@ -302,6 +313,7 @@ fn main() -> Result<()> {
                     &mut qdl_dev,
                     &mut out,
                     &p.partition_name.to_string(),
+                    args.storage_slot,
                     args.phys_part_idx,
                 )?
             }
@@ -312,16 +324,23 @@ fn main() -> Result<()> {
             let outpath = Path::new(&outdir);
             let mut out = File::create(outpath.join(&name))?;
 
-            read_storage_logical_partition(&mut qdl_dev, &mut out, &name, args.phys_part_idx)?
+            read_storage_logical_partition(
+                &mut qdl_dev,
+                &mut out,
+                &name,
+                args.storage_slot,
+                args.phys_part_idx,
+            )?
         }
         Command::Erase { name } => {
-            let part = find_part(&mut qdl_dev, &name, args.phys_part_idx)?;
+            let part = find_part(&mut qdl_dev, &name, args.storage_slot, args.phys_part_idx)?;
 
             firehose_program_storage(
                 &mut qdl_dev,
                 &mut &[0u8][..],
                 &name,
                 (part.ending_lba - part.starting_lba + 1) as usize,
+                args.storage_slot,
                 args.phys_part_idx,
                 &part.starting_lba.to_string(),
             )?;
@@ -357,12 +376,15 @@ fn main() -> Result<()> {
                 &mut file,
                 "",
                 file_len_sectors as usize,
+                args.storage_slot,
                 args.phys_part_idx,
                 "0",
             )?;
         }
         Command::Peek { base, len } => firehose_peek(&mut qdl_dev, base, len)?,
-        Command::PrintGpt => print_partition_table(&mut qdl_dev, args.phys_part_idx)?,
+        Command::PrintGpt => {
+            print_partition_table(&mut qdl_dev, args.storage_slot, args.phys_part_idx)?
+        }
         Command::Reset { reset_mode } => {
             firehose_reset(&mut qdl_dev, &FirehoseResetMode::from_str(&reset_mode)?, 0)?
         }
@@ -371,8 +393,12 @@ fn main() -> Result<()> {
             part_name,
             file_path,
         } => {
-            let part: gptman::GPTPartitionEntry =
-                find_part(&mut qdl_dev, &part_name, args.phys_part_idx)?;
+            let part: gptman::GPTPartitionEntry = find_part(
+                &mut qdl_dev,
+                &part_name,
+                args.storage_slot,
+                args.phys_part_idx,
+            )?;
             let mut file = File::open(file_path)?;
             let file_len_sectors = file
                 .metadata()?
@@ -394,6 +420,7 @@ fn main() -> Result<()> {
                 &mut file,
                 &part_name,
                 file_len_sectors as usize,
+                args.storage_slot,
                 args.phys_part_idx,
                 &part.starting_lba.to_string(),
             )?;

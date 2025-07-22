@@ -9,13 +9,14 @@ use qdl::{self, firehose_read_storage, types::QdlChan};
 
 pub fn read_gpt_from_storage<T: Read + Write + QdlChan>(
     channel: &mut T,
+    slot: u8,
     phys_part_idx: u8,
 ) -> Result<GPT> {
     let mut buf = Cursor::new(Vec::<u8>::new());
 
     // First, probe sector 1 to retrieve the GPT size
     // Note, sector 0 contains a fake MBR as per the GPT spec ("Protective MBR")
-    firehose_read_storage(channel, &mut buf, 1, phys_part_idx, 1)?;
+    firehose_read_storage(channel, &mut buf, 1, slot, phys_part_idx, 1)?;
 
     buf.rewind()?;
     let header = match GPTHeader::read_from(&mut buf) {
@@ -28,7 +29,7 @@ pub fn read_gpt_from_storage<T: Read + Write + QdlChan>(
 
     // Then, read the entire GPT and parse it
     buf.rewind()?;
-    firehose_read_storage(channel, &mut buf, gpt_len, phys_part_idx, 0)?;
+    firehose_read_storage(channel, &mut buf, gpt_len, slot, phys_part_idx, 0)?;
 
     // Ignore the aforementioned MBR sector
     buf.set_position(channel.fh_config().storage_sector_size as u64);
@@ -38,9 +39,10 @@ pub fn read_gpt_from_storage<T: Read + Write + QdlChan>(
 pub fn find_part<T: Read + Write + QdlChan>(
     channel: &mut T,
     name: &str,
+    slot: u8,
     phys_part_idx: u8,
 ) -> Result<GPTPartitionEntry> {
-    match read_gpt_from_storage(channel, phys_part_idx)?
+    match read_gpt_from_storage(channel, slot, phys_part_idx)?
         .iter()
         .find(|(_, p)| p.partition_name.to_string() == name)
     {
@@ -51,9 +53,10 @@ pub fn find_part<T: Read + Write + QdlChan>(
 
 pub fn print_partition_table<T: Read + Write + QdlChan>(
     channel: &mut T,
+    slot: u8,
     phys_part_idx: u8,
 ) -> Result<()> {
-    let gpt = read_gpt_from_storage(channel, phys_part_idx)?;
+    let gpt = read_gpt_from_storage(channel, slot, phys_part_idx)?;
 
     println!(
         "GPT on physical partition {} of {}:",
@@ -87,9 +90,10 @@ pub fn read_storage_logical_partition<T: Read + Write + QdlChan>(
     channel: &mut T,
     out: &mut impl Write,
     name: &str,
+    slot: u8,
     phys_part_idx: u8,
 ) -> Result<()> {
-    let gpt = read_gpt_from_storage(channel, phys_part_idx)?;
+    let gpt = read_gpt_from_storage(channel, slot, phys_part_idx)?;
 
     let part = gpt
         .iter()
@@ -101,6 +105,7 @@ pub fn read_storage_logical_partition<T: Read + Write + QdlChan>(
         channel,
         out,
         (part.ending_lba - part.starting_lba + 1) as usize,
+        slot,
         phys_part_idx,
         part.starting_lba as u32,
     )
