@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
-use std::io::{Read, Write};
 
 use indexmap::IndexMap;
 
@@ -17,7 +16,7 @@ const FH_PROTO_VERSION_SUPPORTED: u32 = 1;
 // Parsers are kept separate for more flexibility (e.g. log replay analysis)
 
 /// Check "value" for ack/nak (generic)
-pub fn firehose_parser_ack_nak<T: Read + Write + QdlChan>(
+pub fn firehose_parser_ack_nak<T: QdlChan>(
     _: &mut T,
     attrs: &IndexMap<String, String>,
 ) -> Result<FirehoseStatus, anyhow::Error> {
@@ -30,7 +29,7 @@ pub fn firehose_parser_ack_nak<T: Read + Write + QdlChan>(
 }
 
 /// Parse the \<configure\> response
-pub fn firehose_parser_configure_response<T: Read + Write + QdlChan>(
+pub fn firehose_parser_configure_response<T: QdlChan>(
     channel: &mut T,
     attrs: &IndexMap<String, String>,
 ) -> Result<FirehoseStatus, anyhow::Error> {
