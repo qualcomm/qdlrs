@@ -281,6 +281,7 @@ pub fn firehose_get_storage_info<T: Read + Write + QdlChan>(
 pub fn firehose_patch<T: Read + Write + QdlChan>(
     channel: &mut T,
     byte_off: u64,
+    slot: u8,
     phys_part_idx: u8,
     size: u64,
     start_sector: &str,
@@ -295,6 +296,7 @@ pub fn firehose_patch<T: Read + Write + QdlChan>(
             ),
             ("byte_offset", &byte_off.to_string()),
             ("filename", "DISK"), // DISK means "patch device's storage"
+            ("slot", &slot.to_string()),
             ("physical_partition_number", &phys_part_idx.to_string()),
             ("size_in_bytes", &size.to_string()),
             ("start_sector", start_sector),
@@ -359,6 +361,7 @@ pub fn firehose_program_storage<T: Read + Write + QdlChan>(
     data: &mut impl Read,
     label: &str,
     num_sectors: usize,
+    slot: u8,
     phys_part_idx: u8,
     start_sector: &str,
 ) -> anyhow::Result<()> {
@@ -371,6 +374,7 @@ pub fn firehose_program_storage<T: Read + Write + QdlChan>(
                 &channel.fh_config().storage_sector_size.to_string(),
             ),
             ("num_partition_sectors", &num_sectors.to_string()),
+            ("slot", &slot.to_string()),
             ("physical_partition_number", &phys_part_idx.to_string()),
             ("start_sector", start_sector),
             (
@@ -461,6 +465,7 @@ pub fn firehose_read_storage<T: Read + Write + QdlChan>(
     channel: &mut T,
     out: &mut impl Write,
     num_sectors: usize,
+    slot: u8,
     phys_part_idx: u8,
     start_sector: u32,
 ) -> anyhow::Result<()> {
@@ -473,6 +478,7 @@ pub fn firehose_read_storage<T: Read + Write + QdlChan>(
                 &channel.fh_config().storage_sector_size.to_string(),
             ),
             ("num_partition_sectors", &num_sectors.to_string()),
+            ("slot", &slot.to_string()),
             ("physical_partition_number", &phys_part_idx.to_string()),
             ("start_sector", &start_sector.to_string()),
         ],
