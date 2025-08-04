@@ -388,7 +388,7 @@ pub fn sahara_get_ramdump_tbl<T: Read + Write>(
     Ok(tbl)
 }
 
-fn sahara_dump_region<T: Read + Write + QdlChan>(
+fn sahara_dump_region<T: QdlChan>(
     channel: &mut T,
     entry: RamdumpTable64,
     output: &mut impl Write,
@@ -432,7 +432,7 @@ fn sahara_dump_region<T: Read + Write + QdlChan>(
     Ok(())
 }
 
-pub fn sahara_dump_regions<T: Read + Write + QdlChan>(
+pub fn sahara_dump_regions<T: QdlChan>(
     channel: &mut T,
     dump_tbl: Vec<RamdumpTable64>,
     regions_to_dump: Vec<String>,
@@ -480,7 +480,7 @@ pub fn sahara_dump_regions<T: Read + Write + QdlChan>(
     Ok(())
 }
 
-pub fn sahara_run<T: Read + Write + QdlChan>(
+pub fn sahara_run<T: QdlChan>(
     channel: &mut T,
     sahara_mode: SaharaMode,
     sahara_command: Option<SaharaCmdModeCmd>,

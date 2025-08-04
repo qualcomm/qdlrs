@@ -88,7 +88,7 @@ impl Default for FirehoseConfiguration {
     }
 }
 
-pub trait QdlChan {
+pub trait QdlChan: Read + Write {
     fn fh_config(&self) -> &FirehoseConfiguration;
     fn mut_fh_config(&mut self) -> &mut FirehoseConfiguration;
 }

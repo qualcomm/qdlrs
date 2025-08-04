@@ -3,11 +3,11 @@
 use anyhow::{Result, bail};
 use gptman::{self, GPT, GPTHeader, GPTPartitionEntry};
 use owo_colors::OwoColorize;
-use std::io::{Cursor, Error, ErrorKind, Read, Seek, Write};
+use std::io::{Cursor, Error, ErrorKind, Seek, Write};
 
 use qdl::{self, firehose_read_storage, types::QdlChan};
 
-pub fn read_gpt_from_storage<T: Read + Write + QdlChan>(
+pub fn read_gpt_from_storage<T: QdlChan>(
     channel: &mut T,
     slot: u8,
     phys_part_idx: u8,
@@ -36,7 +36,7 @@ pub fn read_gpt_from_storage<T: Read + Write + QdlChan>(
     GPT::read_from(&mut buf, channel.fh_config().storage_sector_size as u64).map_err(|e| e.into())
 }
 
-pub fn find_part<T: Read + Write + QdlChan>(
+pub fn find_part<T: QdlChan>(
     channel: &mut T,
     name: &str,
     slot: u8,
@@ -51,7 +51,7 @@ pub fn find_part<T: Read + Write + QdlChan>(
     }
 }
 
-pub fn print_partition_table<T: Read + Write + QdlChan>(
+pub fn print_partition_table<T: QdlChan>(
     channel: &mut T,
     slot: u8,
     phys_part_idx: u8,
@@ -86,7 +86,7 @@ pub fn print_partition_table<T: Read + Write + QdlChan>(
     Ok(())
 }
 
-pub fn read_storage_logical_partition<T: Read + Write + QdlChan>(
+pub fn read_storage_logical_partition<T: QdlChan>(
     channel: &mut T,
     out: &mut impl Write,
     name: &str,

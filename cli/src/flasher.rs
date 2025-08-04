@@ -6,13 +6,12 @@ use qdl::firehose_set_bootable;
 use qdl::types::QdlChan;
 
 use std::fs::{self};
-use std::io::{Read, Write};
 use std::path::Path;
 
 use crate::programfile;
 
 /// Iterates through program/patch files and executes the instructions therein.
-pub(crate) fn run_flash<T: Read + Write + QdlChan>(
+pub(crate) fn run_flash<T: QdlChan>(
     channel: &mut T,
     program_file_paths: Vec<String>,
     patch_file_paths: Vec<String>,

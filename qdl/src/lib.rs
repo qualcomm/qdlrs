@@ -69,7 +69,7 @@ fn firehose_xml_setup(op: &str, kvps: &[(&str, &str)]) -> anyhow::Result<Vec<u8>
 }
 
 /// Main Firehose XML reading function
-pub fn firehose_read<T: Read + Write + QdlChan>(
+pub fn firehose_read<T: QdlChan>(
     channel: &mut T,
     response_parser: fn(&mut T, &IndexMap<String, String>) -> Result<FirehoseStatus, anyhow::Error>,
 ) -> Result<FirehoseStatus, anyhow::Error> {
@@ -157,10 +157,7 @@ pub fn firehose_read<T: Read + Write + QdlChan>(
 }
 
 /// Send a Firehose packet
-pub fn firehose_write<T: Read + Write + QdlChan>(
-    channel: &mut T,
-    buf: &mut [u8],
-) -> anyhow::Result<()> {
+pub fn firehose_write<T: QdlChan>(channel: &mut T, buf: &mut [u8]) -> anyhow::Result<()> {
     let mut b = buf.to_vec();
 
     // XML can't be n * 512 bytes long by fh spec
@@ -177,7 +174,7 @@ pub fn firehose_write<T: Read + Write + QdlChan>(
 }
 
 /// Send a Firehose packet and check for ack/nak
-pub fn firehose_write_getack<T: Read + Write + QdlChan>(
+pub fn firehose_write_getack<T: QdlChan>(
     channel: &mut T,
     buf: &mut [u8],
     couldnt_what: String,
@@ -196,7 +193,7 @@ pub fn firehose_write_getack<T: Read + Write + QdlChan>(
 }
 
 /// Test performance without sample data
-pub fn firehose_benchmark<T: Read + Write + QdlChan>(
+pub fn firehose_benchmark<T: QdlChan>(
     channel: &mut T,
     trials: u32,
     test_write_perf: bool,
@@ -220,7 +217,7 @@ pub fn firehose_benchmark<T: Read + Write + QdlChan>(
 }
 
 /// Send a "Hello"-type packet to the Device
-pub fn firehose_configure<T: Read + Write + QdlChan>(
+pub fn firehose_configure<T: QdlChan>(
     channel: &mut T,
     skip_storage_init: bool,
 ) -> anyhow::Result<()> {
@@ -255,7 +252,7 @@ pub fn firehose_configure<T: Read + Write + QdlChan>(
 }
 
 /// Do nothing, hopefully succesfully
-pub fn firehose_nop<T: Read + Write + QdlChan>(channel: &mut T) -> anyhow::Result<()> {
+pub fn firehose_nop<T: QdlChan>(channel: &mut T) -> anyhow::Result<()> {
     let mut xml = firehose_xml_setup("nop", &[("value", "ping")])?;
 
     firehose_write_getack(channel, &mut xml, "issue a NOP".to_owned())
@@ -263,7 +260,7 @@ pub fn firehose_nop<T: Read + Write + QdlChan>(channel: &mut T) -> anyhow::Resul
 
 /// Get information about the physical partition of a storage medium (e.g. LUN)
 /// Prints to \<log\> only
-pub fn firehose_get_storage_info<T: Read + Write + QdlChan>(
+pub fn firehose_get_storage_info<T: QdlChan>(
     channel: &mut T,
     phys_part_idx: u8,
 ) -> anyhow::Result<()> {
@@ -278,7 +275,7 @@ pub fn firehose_get_storage_info<T: Read + Write + QdlChan>(
 }
 
 /// Alter Device (TODO: or Host) storage
-pub fn firehose_patch<T: Read + Write + QdlChan>(
+pub fn firehose_patch<T: QdlChan>(
     channel: &mut T,
     byte_off: u64,
     slot: u8,
@@ -309,7 +306,7 @@ pub fn firehose_patch<T: Read + Write + QdlChan>(
 
 /// Peek at memory
 /// Prints to \<log\> only
-pub fn firehose_peek<T: Read + Write + QdlChan>(
+pub fn firehose_peek<T: QdlChan>(
     channel: &mut T,
     addr: u64,
     byte_count: u64,
@@ -336,7 +333,7 @@ pub fn firehose_peek<T: Read + Write + QdlChan>(
 /// Poke at memory
 /// This can lead to lock-ups and resets
 // TODO:x
-pub fn firehose_poke<T: Read + Write + QdlChan>(
+pub fn firehose_poke<T: QdlChan>(
     channel: &mut T,
     addr: u64,
     // TODO: byte count is 1..=8
@@ -356,7 +353,7 @@ pub fn firehose_poke<T: Read + Write + QdlChan>(
 }
 
 /// Write to Device storage
-pub fn firehose_program_storage<T: Read + Write + QdlChan>(
+pub fn firehose_program_storage<T: QdlChan>(
     channel: &mut T,
     data: &mut impl Read,
     label: &str,
@@ -431,7 +428,7 @@ pub fn firehose_program_storage<T: Read + Write + QdlChan>(
 }
 
 /// Get a SHA256 digest of a portion of Device storage
-pub fn firehose_checksum_storage<T: Read + Write + QdlChan>(
+pub fn firehose_checksum_storage<T: QdlChan>(
     channel: &mut T,
     num_sectors: usize,
     phys_part_idx: u8,
@@ -461,8 +458,8 @@ pub fn firehose_checksum_storage<T: Read + Write + QdlChan>(
 }
 
 /// Read (sector-aligned) parts of storage.
-pub fn firehose_read_storage<T: Read + Write + QdlChan>(
-    channel: &mut T,
+pub fn firehose_read_storage(
+    channel: &mut impl QdlChan,
     out: &mut impl Write,
     num_sectors: usize,
     slot: u8,
@@ -528,7 +525,7 @@ pub fn firehose_read_storage<T: Read + Write + QdlChan>(
         let _ = channel.read(&mut [])?;
     }
 
-    if firehose_read::<T>(channel, firehose_parser_ack_nak)? != FirehoseStatus::Ack {
+    if firehose_read(channel, firehose_parser_ack_nak)? != FirehoseStatus::Ack {
         bail!("Failed to complete 'read' op");
     }
 
@@ -536,7 +533,7 @@ pub fn firehose_read_storage<T: Read + Write + QdlChan>(
 }
 
 /// Reboot or power off the Device
-pub fn firehose_reset<T: Read + Write + QdlChan>(
+pub fn firehose_reset<T: QdlChan>(
     channel: &mut T,
     mode: &FirehoseResetMode,
     delay_in_sec: u32,
@@ -560,10 +557,7 @@ pub fn firehose_reset<T: Read + Write + QdlChan>(
 }
 
 /// Mark a physical storage partition as bootable
-pub fn firehose_set_bootable<T: Read + Write + QdlChan>(
-    channel: &mut T,
-    drive_idx: u8,
-) -> anyhow::Result<()> {
+pub fn firehose_set_bootable<T: QdlChan>(channel: &mut T, drive_idx: u8) -> anyhow::Result<()> {
     let mut xml = firehose_xml_setup(
         "setbootablestoragedrive",
         &[("value", &drive_idx.to_string())],
