@@ -91,7 +91,7 @@ pub trait QdlChan {
     fn mut_fh_config(&mut self) -> &mut FirehoseConfiguration;
 }
 
-pub trait QdlReadWrite: Read + Write {}
+pub trait QdlReadWrite: Read + Write + Send + Sync {}
 
 pub struct QdlDevice<'a> {
     pub rw: &'a mut dyn QdlReadWrite,
