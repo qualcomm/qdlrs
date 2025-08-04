@@ -92,6 +92,7 @@ pub trait QdlChan {
 }
 
 pub trait QdlReadWrite: Read + Write + Send + Sync {}
+impl<T> QdlReadWrite for &mut T where T: QdlReadWrite {}
 
 pub struct QdlDevice<'a> {
     pub rw: &'a mut dyn QdlReadWrite,
