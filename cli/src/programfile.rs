@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
-use anyhow::bail;
+use anyhow::{Ok, bail};
 use indexmap::IndexMap;
 use std::{
     fs,
@@ -12,6 +12,10 @@ use xmltree::{self, Element, XMLNode};
 use qdl::{
     firehose_checksum_storage, firehose_patch, firehose_program_storage, firehose_read_storage,
     types::QdlChan,
+};
+
+use android_sparse_image::{
+    ChunkHeader, ChunkHeaderBytes, ChunkType, FILE_HEADER_BYTES_LEN, FileHeader, FileHeaderBytes,
 };
 
 fn parse_read_cmd<T: Read + Write + QdlChan>(
@@ -153,7 +157,73 @@ fn parse_program_cmd<T: Read + Write + QdlChan>(
         }
     }
 
+    let sparse = attrs
+        .get("sparse")
+        .unwrap_or(&"false".to_owned())
+        .parse::<bool>()
+        .unwrap_or(false);
+
     let mut buf = fs::File::open(file_path)?;
+
+    if sparse {
+        let mut header_bytes: FileHeaderBytes = [0; FILE_HEADER_BYTES_LEN];
+        buf.read_exact(&mut header_bytes)?;
+        let header = FileHeader::from_bytes(&header_bytes)?;
+
+        let mut offset: usize = 0;
+        let start_sector = start_sector.parse::<usize>()?;
+        for index in 0..header.chunks {
+            let label_sparse = format!("{label}_{index}");
+            let mut chunk_bytes = ChunkHeaderBytes::default();
+            buf.read_exact(&mut chunk_bytes)?;
+            let chunk = ChunkHeader::from_bytes(&chunk_bytes)?;
+
+            let out_size = chunk.out_size(&header);
+            let num_sectors = out_size / sector_size;
+            let start_offset = start_sector + offset;
+            match chunk.chunk_type {
+                ChunkType::Raw => {
+                    firehose_program_storage(
+                        channel,
+                        &mut buf,
+                        &label_sparse,
+                        num_sectors,
+                        phys_part_idx,
+                        start_offset.to_string().as_str(),
+                    )?;
+                }
+                ChunkType::Fill => {
+                    let mut fill_value = [0u8; 4];
+                    buf.read_exact(&mut fill_value)?;
+
+                    let mut fill_vec = Vec::<u8>::with_capacity(out_size);
+                    for _ in 0..out_size / 4 {
+                        fill_vec.extend_from_slice(&fill_value[..]);
+                    }
+
+                    firehose_program_storage(
+                        channel,
+                        &mut &fill_vec[..],
+                        &label_sparse,
+                        num_sectors,
+                        phys_part_idx,
+                        start_offset.to_string().as_str(),
+                    )?;
+                }
+                ChunkType::DontCare => {
+                    // Don't Care, skip
+                }
+                ChunkType::Crc32 => {
+                    // Not supported, on qcom tools is ignored, seek if present
+                    buf.seek_relative(4)?;
+                }
+            }
+
+            offset += out_size;
+        }
+        return Ok(());
+    }
+
     buf.seek(SeekFrom::Current(
         sector_size as i64 * file_sector_offset as i64,
     ))?;
