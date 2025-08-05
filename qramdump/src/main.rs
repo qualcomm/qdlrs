@@ -39,13 +39,13 @@ pub fn main() -> Result<()> {
         None => QdlBackend::default(),
     };
 
-    let mut rw_channel = match setup_target_device(backend, args.serial_no, args.dev_path) {
+    let rw_channel = match setup_target_device(backend, args.serial_no, args.dev_path) {
         Ok(c) => c,
         Err(e) => bail!("Couldn't set up device: {}", e.to_string()),
     };
 
     let mut qdl_dev = QdlDevice {
-        rw: rw_channel.as_mut(),
+        rw: rw_channel,
         fh_cfg: FirehoseConfiguration::default(),
         reset_on_drop: false,
     };
