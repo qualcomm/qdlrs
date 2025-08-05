@@ -94,21 +94,30 @@ pub trait QdlChan: Read + Write {
 }
 
 pub trait QdlReadWrite: Read + Write + Send + Sync {}
-impl<T> QdlReadWrite for &mut T where T: QdlReadWrite {}
+impl<T> QdlReadWrite for &mut T where T: QdlReadWrite + ?Sized {}
 
-pub struct QdlDevice<'a> {
-    pub rw: &'a mut dyn QdlReadWrite,
+pub struct QdlDevice<T>
+where
+    T: QdlReadWrite + ?Sized,
+{
+    pub rw: Box<T>,
     pub fh_cfg: FirehoseConfiguration,
     pub reset_on_drop: bool,
 }
 
-impl Read for QdlDevice<'_> {
+impl<T> Read for QdlDevice<T>
+where
+    T: QdlReadWrite + ?Sized,
+{
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.rw.read(buf)
     }
 }
 
-impl Write for QdlDevice<'_> {
+impl<T> Write for QdlDevice<T>
+where
+    T: QdlReadWrite + ?Sized,
+{
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.rw.write(buf)
     }
@@ -118,7 +127,10 @@ impl Write for QdlDevice<'_> {
     }
 }
 
-impl QdlChan for QdlDevice<'_> {
+impl<T> QdlChan for QdlDevice<T>
+where
+    T: QdlReadWrite + ?Sized,
+{
     fn fh_config(&self) -> &FirehoseConfiguration {
         &self.fh_cfg
     }
@@ -128,7 +140,10 @@ impl QdlChan for QdlDevice<'_> {
     }
 }
 
-impl Drop for QdlDevice<'_> {
+impl<T> Drop for QdlDevice<T>
+where
+    T: QdlReadWrite + ?Sized,
+{
     fn drop(&mut self) {
         // Avoid having the board be stuck in EDL limbo in case of errors
         // TODO: watch 'rawmode' and adjust accordingly

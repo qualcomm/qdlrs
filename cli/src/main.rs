@@ -209,12 +209,12 @@ fn main() -> Result<()> {
     );
 
     // Set up the device
-    let mut rw_channel = match setup_target_device(backend, args.serial_no, args.dev_path) {
+    let rw_channel = match setup_target_device(backend, args.serial_no, args.dev_path) {
         Ok(c) => c,
         Err(e) => bail!("Couldn't set up device: {}", e.to_string()),
     };
     let mut qdl_dev = QdlDevice {
-        rw: rw_channel.as_mut(),
+        rw: rw_channel,
         fh_cfg: FirehoseConfiguration {
             hash_packets: args.hash_packets,
             read_back_verify: args.read_back_verify,
