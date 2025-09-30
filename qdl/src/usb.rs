@@ -3,7 +3,7 @@
 use anyhow::{Context, Result, bail};
 use rusb::{self, Device, DeviceHandle, GlobalContext};
 use std::{
-    io::{Error, ErrorKind, Read, Write},
+    io::{BufRead, Error, ErrorKind, Read, Write},
     time::Duration,
 };
 
@@ -13,6 +13,9 @@ pub struct QdlUsbConfig {
     dev_handle: rusb::DeviceHandle<GlobalContext>,
     in_ep: u8,
     out_ep: u8,
+    buf: Vec<u8>,
+    pos: usize,
+    cap: usize,
 }
 
 // TODO: timeouts?
@@ -27,12 +30,45 @@ impl Write for QdlUsbConfig {
         Ok(())
     }
 }
-
 impl Read for QdlUsbConfig {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
+    fn read(&mut self, out: &mut [u8]) -> Result<usize, std::io::Error> {
+        // Drain internal buffer first
+        if self.pos < self.cap {
+            let n = std::cmp::min(out.len(), self.cap - self.pos);
+            out[..n].copy_from_slice(&self.buf[self.pos..self.pos + n]);
+            self.pos += n;
+            return Ok(n);
+        }
+        // Otherwise, read directly from USB
         self.dev_handle
-            .read_bulk(self.in_ep, buf, Duration::from_secs(10))
+            .read_bulk(self.in_ep, out, Duration::from_secs(10))
             .map_err(rusb_err_xlate)
+    }
+}
+
+impl BufRead for QdlUsbConfig {
+    fn fill_buf(&mut self) -> Result<&[u8], std::io::Error> {
+        if self.pos >= self.cap {
+            self.pos = 0;
+            self.cap = 0;
+            if self.buf.is_empty() {
+                self.buf.resize(4096, 0);
+            }
+            match self
+                .dev_handle
+                .read_bulk(self.in_ep, &mut self.buf, Duration::from_secs(10))
+            {
+                Ok(n) => {
+                    self.cap = n;
+                }
+                Err(e) => return Err(rusb_err_xlate(e)),
+            }
+        }
+        Ok(&self.buf[self.pos..self.cap])
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.pos = std::cmp::min(self.pos + amt, self.cap);
     }
 }
 
@@ -122,11 +158,13 @@ pub fn setup_usb_device(serial_no: Option<String>) -> Result<QdlUsbConfig> {
     dev_handle
         .claim_interface(intf_desc.interface_number())
         .with_context(|| format!("Couldn't claim interface{}", intf_desc.interface_number()))?;
-
     Ok(QdlUsbConfig {
         dev_handle,
         in_ep,
         out_ep,
+        buf: Vec::new(),
+        pos: 0,
+        cap: 0,
     })
 }
 

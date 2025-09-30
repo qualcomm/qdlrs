@@ -2,7 +2,7 @@
 // Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 use std::{
     fmt::Display,
-    io::{ErrorKind, Read, Write},
+    io::{BufRead, ErrorKind, Read, Write},
     str::FromStr,
 };
 
@@ -87,13 +87,12 @@ impl Default for FirehoseConfiguration {
         }
     }
 }
-
-pub trait QdlChan: Read + Write {
+pub trait QdlChan: BufRead + Write {
     fn fh_config(&self) -> &FirehoseConfiguration;
     fn mut_fh_config(&mut self) -> &mut FirehoseConfiguration;
 }
 
-pub trait QdlReadWrite: Read + Write + Send + Sync {}
+pub trait QdlReadWrite: BufRead + Write + Send + Sync {}
 impl<T> QdlReadWrite for &mut T where T: QdlReadWrite + ?Sized {}
 
 pub struct QdlDevice<T>
@@ -124,6 +123,19 @@ where
 
     fn flush(&mut self) -> std::io::Result<()> {
         self.rw.flush()
+    }
+}
+
+impl<T> std::io::BufRead for QdlDevice<T>
+where
+    T: QdlReadWrite + ?Sized,
+{
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        self.rw.fill_buf()
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.rw.consume(amt);
     }
 }
 
