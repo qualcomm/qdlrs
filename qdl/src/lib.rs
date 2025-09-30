@@ -7,8 +7,7 @@ use owo_colors::OwoColorize;
 use parsers::firehose_parser_ack_nak;
 use serial::setup_serial_device;
 use std::cmp::min;
-use std::io::Read;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::str::{self, FromStr};
 use types::FirehoseResetMode;
 use types::FirehoseStatus;
@@ -73,13 +72,13 @@ pub fn firehose_read<T: QdlChan>(
     channel: &mut T,
     response_parser: fn(&mut T, &IndexMap<String, String>) -> Result<FirehoseStatus, anyhow::Error>,
 ) -> Result<FirehoseStatus, anyhow::Error> {
-    // xml_buffer_size comes from the device, so the XML should always fit
-    let mut buf = vec![0u8; channel.fh_config().xml_buf_size];
     let mut got_any_data = false;
+    let mut pending: Vec<u8> = Vec::new();
 
     loop {
-        let bytes_read = match channel.read(&mut buf) {
-            Ok(n) => n,
+        // Use BufRead to peek at available data
+        let available = match channel.fill_buf() {
+            Ok(buf) => buf,
             Err(e) => match e.kind() {
                 // In some cases (like with welcome messages), there's no acking
                 // and a timeout is the "end of data" marker instead..
@@ -96,15 +95,40 @@ pub fn firehose_read<T: QdlChan>(
 
         got_any_data = true;
 
-        let xml_fragments_indices: Vec<_> = str::from_utf8(&buf[..bytes_read])?
-            .match_indices("<?xml")
-            .map(|s| s.0)
-            .collect();
+        // When channel is a non-packetized BufRead (e.g. serial) XML documents
+        // are not separated from each other, or from rawmode data. Search for
+        // </data> in the BufRead stream to find the end of the current
+        // message.
+        let data_end_marker = b"</data>";
 
-        for chunk in xml_fragments_indices.chunks(2) {
-            let start = chunk[0];
-            let end = *chunk.get(1).unwrap_or(&bytes_read);
-            let xml = xmltree::Element::parse(&buf[start..end])?;
+        let pending_length = pending.len();
+        pending.extend_from_slice(available);
+
+        // Search for the end marker in the pending data
+        let end_pos = pending
+            .windows(data_end_marker.len())
+            .position(|window| window == data_end_marker);
+
+        if let Some(pos) = end_pos {
+            let xml_end = pos + data_end_marker.len();
+
+            // xml_end is relative "pending", we need to consume only new the tail
+            channel.consume(xml_end - pending_length);
+
+            // Only parse the XML portion
+            let xml_chunk = &pending[..xml_end];
+            let xml = match xmltree::Element::parse(xml_chunk) {
+                Ok(x) => x,
+                Err(e) => {
+                    // Consume the bad data and continue
+                    bail!("Failed to parse XML: {}", e);
+                }
+            };
+
+            // The current message might have started in "pending", so clear it
+            // now. No need to do this if we're bailing above, as it's a local
+            // resource.
+            pending.clear();
 
             if xml.name != "data" {
                 // TODO: define a more verbose level
@@ -152,6 +176,12 @@ pub fn firehose_read<T: QdlChan>(
                 // Pass other nodes to specialized parsers
                 return response_parser(channel, &e.attributes);
             }
+        } else {
+            // Didn't find the tail of the XML document in "pending" +
+            // "available", consume the data into "pending" to let fill_buf()
+            // read more data from the underlying Read.
+            let available_len = available.len();
+            channel.consume(available_len);
         }
     }
 }
