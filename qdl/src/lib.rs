@@ -474,7 +474,7 @@ pub fn firehose_read_storage(
     phys_part_idx: u8,
     start_sector: u32,
 ) -> anyhow::Result<()> {
-    let mut sectors_left = num_sectors;
+    let mut bytes_left = num_sectors * channel.fh_config().storage_sector_size;
     let mut xml = firehose_xml_setup(
         "read",
         &[
@@ -494,22 +494,13 @@ pub fn firehose_read_storage(
         bail!("Read request was NAKed");
     }
 
-    let mut pb = ProgressBar::new((sectors_left * channel.fh_config().storage_sector_size) as u64);
+    let mut pb = ProgressBar::new(bytes_left as u64);
     pb.set_units(Units::Bytes);
 
     let mut last_read_was_zero_len = false;
-    while sectors_left > 0 {
-        let chunk_size_sectors = min(
-            sectors_left,
-            channel.fh_config().recv_buffer_size / channel.fh_config().storage_sector_size,
-        );
-        let mut buf = vec![
-            0;
-            min(
-                channel.fh_config().recv_buffer_size,
-                chunk_size_sectors * channel.fh_config().storage_sector_size
-            )
-        ];
+    while bytes_left > 0 {
+        let chunk_size_bytes = min(bytes_left, channel.fh_config().recv_buffer_size);
+        let mut buf = vec![0; chunk_size_bytes];
 
         let n = channel.read(&mut buf).expect("Error receiving data");
         if n == 0 {
@@ -517,15 +508,13 @@ pub fn firehose_read_storage(
             /* Every 2 or 3 packets should be empty? */
             last_read_was_zero_len = true;
             continue;
-        } else if n != chunk_size_sectors * channel.fh_config().storage_sector_size {
-            bail!("Read an unexpected number of bytes ({})", n);
         }
 
         last_read_was_zero_len = false;
-        let _ = out.write(&buf)?;
+        let _ = out.write(&buf[..n])?;
 
-        sectors_left -= chunk_size_sectors;
-        pb.add((chunk_size_sectors * channel.fh_config().storage_sector_size) as u64);
+        bytes_left -= n;
+        pb.add(n as u64);
     }
 
     if !last_read_was_zero_len && channel.fh_config().backend == QdlBackend::Usb {
