@@ -161,7 +161,7 @@ pub fn firehose_write<T: QdlChan>(channel: &mut T, buf: &mut [u8]) -> anyhow::Re
     let mut b = buf.to_vec();
 
     // XML can't be n * 512 bytes long by fh spec
-    if !buf.is_empty() && buf.len() % 512 == 0 {
+    if !buf.is_empty() && buf.len().is_multiple_of(512) {
         println!("{}", "INFO: Appending '\n' to outgoing XML".bright_black());
         b.push(b'\n');
     }
@@ -223,9 +223,17 @@ pub fn firehose_configure<T: QdlChan>(
 ) -> anyhow::Result<()> {
     let config = channel.fh_config();
     // Spec requirement
-    assert!(config.send_buffer_size % config.storage_sector_size == 0);
+    assert!(
+        config
+            .send_buffer_size
+            .is_multiple_of(config.storage_sector_size)
+    );
     // Sanity requirement
-    assert!(config.send_buffer_size % config.storage_sector_size == 0);
+    assert!(
+        config
+            .send_buffer_size
+            .is_multiple_of(config.storage_sector_size)
+    );
     let mut xml = firehose_xml_setup(
         "configure",
         &[

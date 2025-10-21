@@ -421,7 +421,7 @@ fn sahara_dump_region<T: QdlChan>(
         bytes_read += channel.read(&mut buf)?;
 
         // Issue a dummy read to consume the ZLP
-        if channel.fh_config().backend == QdlBackend::Usb && buf.len() % 512 == 0 {
+        if channel.fh_config().backend == QdlBackend::Usb && buf.len().is_multiple_of(512) {
             let _ = channel.read(&mut []);
         }
 
@@ -536,14 +536,12 @@ pub fn sahara_run<T: QdlChan>(
                 }
             }
             SaharaCmd::SaharaDoneResp => {
-                if let SaharaPacketBody::DoneResp(req) = pkt.body {
-                    if req.status == 1 /* COMPLETE */
-                    /* 8916 bug */
-                    || images.len() == 1
-                    {
-                        println!("{}", "Loader sent. Hack away!".green());
-                        return Ok(vec![]);
-                    }
+                if let SaharaPacketBody::DoneResp(req) = pkt.body
+                    && (req.status == 1 /* COMPLETE */ /* 8916 bug */ ||
+                     images.len() == 1)
+                {
+                    println!("{}", "Loader sent. Hack away!".green());
+                    return Ok(vec![]);
                 }
             }
             SaharaCmd::SaharaCommandReady => {
