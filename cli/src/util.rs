@@ -101,12 +101,12 @@ pub fn read_storage_logical_partition<T: QdlChan>(
         .ok_or(Error::from(ErrorKind::NotFound))?
         .1;
 
-    firehose_read_storage(
+    Ok(firehose_read_storage(
         channel,
         out,
         (part.ending_lba - part.starting_lba + 1) as usize,
         slot,
         phys_part_idx,
         part.starting_lba as u32,
-    )
+    )?)
 }

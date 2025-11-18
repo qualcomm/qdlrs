@@ -9,15 +9,59 @@ use std::{
     fs::File,
     io::{Read, Write},
     mem::{self, size_of_val},
+    str::Utf8Error,
+    string::FromUtf8Error,
 };
-
-use anyhow::{Result, anyhow, bail};
 
 use bincode::serialize;
 use serde::{self, Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::types::{QdlBackend, QdlChan};
+
+#[non_exhaustive]
+#[derive(Debug, thiserror::Error)]
+pub enum SaharaError {
+    #[error("Failed to write XML")]
+    XmlWrite(#[from] xmltree::Error),
+    #[error("Failed to parse XML")]
+    XmlParse(#[from] xmltree::ParseError),
+    #[error("Got a packet without an XML data tag")]
+    PacketWithoutXmlDataTag,
+
+    #[error("Firehose programmer requested a restart. Run the program again.")]
+    RequestedRestart,
+    #[error("Wrote an unexpected number of bytes: {0}")]
+    WroteUnexpectedAmount(usize),
+
+    #[error("Missing Sahara command in sahara_run")]
+    MissingSaharaCommand,
+
+    #[error("Attempted OOB read {pos} > {bound}")]
+    AttemptedOOBRead { pos: usize, bound: usize },
+
+    #[error("I/O error while reading")]
+    ReadIO(#[source] std::io::Error),
+    #[error("I/O error while writing")]
+    WriteIO(#[source] std::io::Error),
+    #[error("File I/O error while dumping regions to local disk")]
+    DumpRegionsFileIO(#[source] std::io::Error),
+
+    #[error("Failed to decode UTF-8")]
+    Utf8(#[from] Utf8Error),
+
+    #[error("Bincode error")]
+    Bincode(#[from] bincode::Error),
+
+    #[error("Malformed packet, too short: {buf:?}")]
+    PacketTooShort { buf: Vec<u8> },
+}
+
+impl From<FromUtf8Error> for SaharaError {
+    fn from(value: FromUtf8Error) -> Self {
+        Self::Utf8(value.utf8_error())
+    }
+}
 
 const SAHARA_STATUS_SUCCESS: u32 = 0;
 
@@ -223,20 +267,23 @@ pub fn sahara_send_img_to_device<T: Read + Write>(
     image_idx: u64,
     image_offset: u64,
     image_len: u64,
-) -> Result<usize, anyhow::Error> {
+) -> Result<usize, SaharaError> {
     let image = if img_arr.len() == 1 { 0 } else { image_idx };
     let buf = &mut img_arr[image as usize];
-    if (image_offset + image_len) as usize > buf.len() {
-        bail!(
-            "Attempted OOB read {} > {}",
-            image_offset + image_len,
-            buf.len()
-        );
+
+    let start = image_offset as usize;
+    let end = (image_offset + image_len) as usize;
+
+    if start > buf.len() {
+        return Err(SaharaError::AttemptedOOBRead {
+            pos: start,
+            bound: buf.len(),
+        });
     }
 
     channel
-        .write(&buf[image_offset as usize..(image_offset + image_len) as usize])
-        .map_err(|e| e.into())
+        .write(&buf[start..end])
+        .map_err(SaharaError::WriteIO)
 }
 
 fn sahara_send_generic<T: Read + Write>(
@@ -244,7 +291,7 @@ fn sahara_send_generic<T: Read + Write>(
     cmd: SaharaCmd,
     body: SaharaPacketBody,
     body_len: usize,
-) -> Result<usize> {
+) -> Result<usize, SaharaError> {
     let pkt = SaharaPacket {
         cmd,
         len: (size_of_val(&cmd) + size_of::<u32>() + body_len) as u32,
@@ -253,11 +300,14 @@ fn sahara_send_generic<T: Read + Write>(
 
     channel
         .write(&serialize(&pkt).expect("Error serializing packet"))
-        .map_err(|e| e.into())
+        .map_err(SaharaError::WriteIO)
 }
 
 const SAHARA_VERSION: u32 = 2;
-pub fn sahara_send_hello_rsp<T: Read + Write>(channel: &mut T, mode: SaharaMode) -> Result<usize> {
+pub fn sahara_send_hello_rsp<T: Read + Write>(
+    channel: &mut T,
+    mode: SaharaMode,
+) -> Result<usize, SaharaError> {
     let data = HelloResp {
         ver: SAHARA_VERSION,
         compatible: 1,
@@ -279,7 +329,7 @@ pub fn sahara_send_hello_rsp<T: Read + Write>(channel: &mut T, mode: SaharaMode)
     )
 }
 
-pub fn sahara_send_done<T: Read + Write>(channel: &mut T) -> Result<usize> {
+pub fn sahara_send_done<T: Read + Write>(channel: &mut T) -> Result<usize, SaharaError> {
     let data = DoneReq {};
 
     sahara_send_generic(
@@ -293,7 +343,7 @@ pub fn sahara_send_done<T: Read + Write>(channel: &mut T) -> Result<usize> {
 pub fn sahara_send_cmd_exec<T: Read + Write>(
     channel: &mut T,
     command: SaharaCmdModeCmd,
-) -> Result<usize, anyhow::Error> {
+) -> Result<usize, SaharaError> {
     sahara_send_generic(
         channel,
         SaharaCmd::SaharaExecute,
@@ -305,7 +355,7 @@ pub fn sahara_send_cmd_exec<T: Read + Write>(
 pub fn sahara_send_cmd_data<T: Read + Write>(
     channel: &mut T,
     command: SaharaCmdModeCmd,
-) -> Result<usize, anyhow::Error> {
+) -> Result<usize, SaharaError> {
     sahara_send_generic(
         channel,
         SaharaCmd::SaharaExecuteData,
@@ -314,7 +364,7 @@ pub fn sahara_send_cmd_data<T: Read + Write>(
     )
 }
 
-pub fn sahara_reset<T: Read + Write>(channel: &mut T) -> Result<usize, anyhow::Error> {
+pub fn sahara_reset<T: Read + Write>(channel: &mut T) -> Result<usize, SaharaError> {
     let data = ResetReq {};
 
     sahara_send_generic(
@@ -328,7 +378,7 @@ pub fn sahara_reset<T: Read + Write>(channel: &mut T) -> Result<usize, anyhow::E
 pub fn sahara_switch_mode<T: Read + Write>(
     channel: &mut T,
     mode: SaharaMode,
-) -> Result<usize, anyhow::Error> {
+) -> Result<usize, SaharaError> {
     let data = SwitchMode { mode };
 
     sahara_send_generic(
@@ -344,7 +394,7 @@ pub fn sahara_get_ramdump_tbl<T: Read + Write>(
     addr: u64,
     len: u64,
     verbose: bool,
-) -> Result<Vec<RamdumpTable64>, anyhow::Error> {
+) -> Result<Vec<RamdumpTable64>, SaharaError> {
     let data = ReadMem64Req { addr, len };
 
     sahara_send_generic(
@@ -359,7 +409,7 @@ pub fn sahara_get_ramdump_tbl<T: Read + Write>(
     let mut tbl = Vec::<RamdumpTable64>::with_capacity(num_chunks);
 
     let mut buf = vec![0u8; len as usize];
-    channel.read_exact(&mut buf)?;
+    channel.read_exact(&mut buf).map_err(SaharaError::ReadIO)?;
 
     if verbose {
         println!("Available images:");
@@ -388,7 +438,7 @@ fn sahara_dump_region<T: QdlChan>(
     channel: &mut T,
     entry: RamdumpTable64,
     output: &mut impl Write,
-) -> Result<()> {
+) -> Result<(), SaharaError> {
     let mut pb = ProgressBar::new(entry.len);
     pb.show_time_left = true;
     pb.message(&format!(
@@ -412,9 +462,9 @@ fn sahara_dump_region<T: QdlChan>(
             SaharaPacketBody::ReadMem64Req(data),
             size_of_val(&data),
         )?;
-        channel.flush()?;
+        channel.flush().map_err(SaharaError::WriteIO)?;
 
-        bytes_read += channel.read(&mut buf)?;
+        bytes_read += channel.read(&mut buf).map_err(SaharaError::ReadIO)?;
 
         // Issue a dummy read to consume the ZLP
         if channel.fh_config().backend == QdlBackend::Usb && buf.len().is_multiple_of(512) {
@@ -422,7 +472,7 @@ fn sahara_dump_region<T: QdlChan>(
         }
 
         pb.set(bytes_read as u64);
-        let _ = output.write(&buf)?;
+        let _ = output.write(&buf).map_err(SaharaError::WriteIO)?;
     }
 
     Ok(())
@@ -432,14 +482,14 @@ pub fn sahara_dump_regions<T: QdlChan>(
     channel: &mut T,
     dump_tbl: Vec<RamdumpTable64>,
     regions_to_dump: Vec<String>,
-) -> Result<()> {
+) -> Result<(), SaharaError> {
     // Make all of them lowercase for better UX
     let regions_to_dump = regions_to_dump
         .iter()
         .map(|rname| rname.to_ascii_lowercase())
         .collect::<Vec<String>>();
 
-    std::fs::create_dir_all("ramdump/")?;
+    std::fs::create_dir_all("ramdump/").map_err(SaharaError::DumpRegionsFileIO)?;
     let filtered_list: Vec<RamdumpTable64> = match regions_to_dump.len() {
         // Dump everything with save_pref == true if no argument was provided
         0 => dump_tbl
@@ -469,7 +519,8 @@ pub fn sahara_dump_regions<T: QdlChan>(
             .to_str()?
             .to_owned();
 
-        let mut f = File::create(std::path::Path::new(&format!("ramdump/{fname}")))?;
+        let mut f = File::create(std::path::Path::new(&format!("ramdump/{fname}")))
+            .map_err(SaharaError::DumpRegionsFileIO)?;
         sahara_dump_region(channel, entry, &mut f)?;
     }
 
@@ -483,11 +534,11 @@ pub fn sahara_run<T: QdlChan>(
     images: &mut [Vec<u8>],
     filenames: Vec<String>,
     verbose: bool,
-) -> Result<Vec<u8>> {
+) -> Result<Vec<u8>, SaharaError> {
     let mut buf = vec![0; 4096];
 
     loop {
-        let bytes_read = channel.read(&mut buf[..])?;
+        let bytes_read = channel.read(&mut buf[..]).map_err(SaharaError::ReadIO)?;
         let pkt = sahara_parse_packet(&buf[..bytes_read], verbose)?;
         let pktsize = size_of_val(&pkt.cmd) + size_of_val(&pkt.len);
 
@@ -543,9 +594,9 @@ pub fn sahara_run<T: QdlChan>(
             SaharaCmd::SaharaCommandReady => {
                 assert_eq!(pkt.len as usize, pktsize);
                 match sahara_command {
-                    Some(cmd) => sahara_send_cmd_exec(channel, cmd),
-                    None => bail!("Missing sahara command"),
-                }?;
+                    Some(cmd) => sahara_send_cmd_exec(channel, cmd)?,
+                    None => return Err(SaharaError::MissingSaharaCommand),
+                };
             }
             SaharaCmd::SaharaExecuteResp => {
                 if let SaharaPacketBody::ExecResp(resp) = pkt.body {
@@ -554,7 +605,7 @@ pub fn sahara_run<T: QdlChan>(
                     // Indicate we're ready to receive the requested amount of data
                     sahara_send_cmd_data(channel, resp.command)?;
 
-                    let resp_len = channel.read(&mut resp_buf)?;
+                    let resp_len = channel.read(&mut resp_buf).map_err(SaharaError::ReadIO)?;
                     assert_eq!(resp_len, resp.len as usize);
 
                     // Got everything we want, exit command mode
@@ -595,16 +646,15 @@ pub fn sahara_run<T: QdlChan>(
     }
 }
 
-fn sahara_parse_packet(buf: &[u8], verbose: bool) -> Result<SaharaPacket> {
+fn sahara_parse_packet(buf: &[u8], verbose: bool) -> Result<SaharaPacket, SaharaError> {
     let (cmd, rest) = buf
         .split_first_chunk::<4>()
-        .ok_or_else(|| anyhow!("Malformed packet, too short: {buf:?}"))?;
+        .ok_or_else(|| SaharaError::PacketTooShort { buf: buf.clone() })?;
     let (len, args) = rest
         .split_first_chunk::<4>()
-        .ok_or_else(|| anyhow!("Malformed packet, too short: {buf:?}"))?;
+        .ok_or_else(|| SaharaError::PacketTooShort { buf: buf.clone() })?;
 
-    let cmd = bincode::deserialize::<SaharaCmd>(cmd)
-        .unwrap_or_else(|_| panic!("Got unknown command {}", u32::from_le_bytes(*cmd)));
+    let cmd = bincode::deserialize::<SaharaCmd>(cmd)?;
 
     let ret = SaharaPacket {
         cmd,

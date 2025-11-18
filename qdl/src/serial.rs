@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
-use anyhow::{Result, bail};
 use serial2::{self, SerialPort};
 use std::io::{BufRead, Read, Write};
 
@@ -62,12 +61,8 @@ impl BufRead for QdlSerialConfig {
 
 impl QdlReadWrite for QdlSerialConfig {}
 
-pub fn setup_serial_device(dev_path: Option<String>) -> Result<QdlSerialConfig> {
-    if dev_path.is_none() {
-        bail!("Serial port path unspecified");
-    }
-
-    let serport = SerialPort::open(dev_path.unwrap(), |mut settings: serial2::Settings| {
+pub fn setup_serial_device(dev_path: String) -> Result<QdlSerialConfig, std::io::Error> {
+    let serport = SerialPort::open(dev_path, |mut settings: serial2::Settings| {
         settings.set_raw();
         settings.set_baud_rate(115200)?;
         Ok(settings)

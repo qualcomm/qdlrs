@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
-use anyhow::{Context, Result, bail};
 use rusb::{self, Device, DeviceHandle, GlobalContext};
 use std::{
-    io::{BufRead, Error, ErrorKind, Read, Write},
+    io::{BufRead, Read, Write},
     time::Duration,
 };
 
@@ -81,31 +80,46 @@ const INTF_DESC_PROTO_CODES: [u8; 3] = [0x10, 0x11, 0xFF];
 fn find_usb_handle_by_sn(
     devices: &mut dyn Iterator<Item = Device<GlobalContext>>,
     serial_no: String,
-) -> Result<DeviceHandle<GlobalContext>> {
-    let mut dev_handle: Option<DeviceHandle<GlobalContext>> = None;
-
+) -> Result<DeviceHandle<GlobalContext>, UsbSetupError> {
     for d in devices {
-        let dh = d.open()?;
+        let dh = d.open().map_err(UsbSetupError::Open)?;
 
-        let prod_str = dh.read_product_string_ascii(&d.device_descriptor().unwrap())?;
+        let prod_str = dh
+            .read_product_string_ascii(&d.device_descriptor().unwrap())
+            .map_err(UsbSetupError::MiscRusb)?;
         let sn = &prod_str[prod_str.find("_SN:").unwrap() + "_SN:".len()..];
         if sn.eq_ignore_ascii_case(&serial_no) {
-            dev_handle = Some(dh);
-            break;
+            return Ok(dh);
         }
     }
 
-    match dev_handle {
-        Some(h) => Ok(h),
-        None => bail!(
-            "Found no devices in EDL mode with serial number {}",
-            serial_no
-        ),
-    }
+    Err(UsbSetupError::NoDevicesSerial { serial_no })
 }
 
-pub fn setup_usb_device(serial_no: Option<String>) -> Result<QdlUsbConfig> {
-    let rusb_devices = rusb::devices()?;
+#[non_exhaustive]
+#[derive(Debug, thiserror::Error)]
+pub enum UsbSetupError {
+    #[error("libusb error")]
+    MiscRusb(#[source] rusb::Error),
+
+    #[error("Failed to find devices in EDL mode with serial number {serial_no}")]
+    NoDevicesSerial { serial_no: String },
+    #[error("Failed to find devices in EDL mode")]
+    NoDevices,
+
+    #[error("Missing {0}")]
+    Missing(&'static str),
+
+    #[error("Failed to enumerate devices")]
+    Enumeration(#[source] rusb::Error),
+    #[error("Failed to open a device")]
+    Open(#[source] rusb::Error),
+    #[error("Failed to claim interface {0}")]
+    ClaimInterface(u8, #[source] rusb::Error),
+}
+
+pub fn setup_usb_device(serial_no: Option<String>) -> Result<QdlUsbConfig, UsbSetupError> {
+    let rusb_devices = rusb::devices().map_err(UsbSetupError::Enumeration)?;
     let mut devices = rusb_devices
         .iter()
         .filter(|d: &rusb::Device<GlobalContext>| {
@@ -114,17 +128,18 @@ pub fn setup_usb_device(serial_no: Option<String>) -> Result<QdlUsbConfig> {
         });
 
     let dev_handle = match serial_no {
-        Some(s) => find_usb_handle_by_sn(&mut devices, s),
+        Some(s) => find_usb_handle_by_sn(&mut devices, s)?,
         None => {
-            let Some(d) = devices.next() else {
-                bail!("Found no devices in EDL mode")
-            };
-            d.open().map_err(|e| rusb_err_xlate(e).into())
+            let d = devices.next().ok_or(UsbSetupError::NoDevices)?;
+            d.open().map_err(UsbSetupError::Open)?
         }
-    }?;
+    };
 
     // TODO: is there always precisely one interface like this?
-    let cfg_desc = dev_handle.device().active_config_descriptor()?;
+    let cfg_desc = dev_handle
+        .device()
+        .active_config_descriptor()
+        .map_err(UsbSetupError::MiscRusb)?;
     let intf_desc = cfg_desc
         .interfaces()
         .next()
@@ -136,28 +151,28 @@ pub fn setup_usb_device(serial_no: Option<String>) -> Result<QdlUsbConfig> {
                 && INTF_DESC_PROTO_CODES.contains(&d.protocol_code())
                 && d.num_endpoints() >= 2
         })
-        .ok_or::<anyhow::Error>(Error::from(ErrorKind::NotFound).into())?;
+        .ok_or(UsbSetupError::Missing("matching interface"))?;
 
     let in_ep = intf_desc
         .endpoint_descriptors()
         .find(|e| {
             e.direction() == rusb::Direction::In && e.transfer_type() == rusb::TransferType::Bulk
         })
-        .unwrap()
+        .ok_or(UsbSetupError::Missing("USB endpoint"))?
         .address();
     let out_ep = intf_desc
         .endpoint_descriptors()
         .find(|e| {
             e.direction() == rusb::Direction::Out && e.transfer_type() == rusb::TransferType::Bulk
         })
-        .unwrap()
+        .ok_or(UsbSetupError::Missing("USB endpoint"))?
         .address();
 
     // Make sure we can actually poke at the device
     dev_handle.set_auto_detach_kernel_driver(true).ok();
     dev_handle
         .claim_interface(intf_desc.interface_number())
-        .with_context(|| format!("Couldn't claim interface{}", intf_desc.interface_number()))?;
+        .map_err(|err| UsbSetupError::ClaimInterface(intf_desc.interface_number(), err))?;
     Ok(QdlUsbConfig {
         dev_handle,
         in_ep,
@@ -168,12 +183,11 @@ pub fn setup_usb_device(serial_no: Option<String>) -> Result<QdlUsbConfig> {
     })
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("libusb error")]
+struct RusbErrorWrap(#[source] rusb::Error);
+
 // TODO: fix this upstream?
 pub fn rusb_err_xlate(e: rusb::Error) -> std::io::Error {
-    std::io::Error::from(match e {
-        rusb::Error::Timeout => std::io::ErrorKind::TimedOut,
-        rusb::Error::Access => std::io::ErrorKind::PermissionDenied,
-        rusb::Error::NoDevice => std::io::ErrorKind::NotConnected,
-        _ => std::io::ErrorKind::Other,
-    })
+    std::io::Error::other(RusbErrorWrap(e))
 }

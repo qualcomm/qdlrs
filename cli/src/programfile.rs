@@ -34,7 +34,12 @@ fn parse_read_cmd<T: QdlChan>(
     let start_sector = attrs.get("start_sector").unwrap().parse::<u32>().unwrap();
 
     if checksum_only {
-        return firehose_checksum_storage(channel, num_sectors, phys_part_idx, start_sector);
+        return Ok(firehose_checksum_storage(
+            channel,
+            num_sectors,
+            phys_part_idx,
+            start_sector,
+        )?);
     }
 
     if !attrs.contains_key("filename") {
@@ -42,14 +47,14 @@ fn parse_read_cmd<T: QdlChan>(
     }
     let mut outfile = fs::File::create(out_dir.join(attrs.get("filename").unwrap()))?;
 
-    firehose_read_storage(
+    Ok(firehose_read_storage(
         channel,
         &mut outfile,
         num_sectors,
         slot,
         phys_part_idx,
         start_sector,
-    )
+    )?)
 }
 
 fn parse_patch_cmd<T: QdlChan>(
@@ -77,7 +82,7 @@ fn parse_patch_cmd<T: QdlChan>(
     let start_sector = attrs.get("start_sector").unwrap();
     let val = attrs.get("value").unwrap();
 
-    firehose_patch(
+    Ok(firehose_patch(
         channel,
         byte_off,
         slot,
@@ -85,7 +90,7 @@ fn parse_patch_cmd<T: QdlChan>(
         size,
         start_sector,
         val,
-    )
+    )?)
 }
 
 const BOOTABLE_PART_NAMES: [&str; 3] = ["xbl", "xbl_a", "sbl1"];
@@ -158,7 +163,7 @@ fn parse_program_cmd<T: QdlChan>(
         sector_size as i64 * file_sector_offset as i64,
     ))?;
 
-    firehose_program_storage(
+    Ok(firehose_program_storage(
         channel,
         &mut buf,
         label,
@@ -166,7 +171,7 @@ fn parse_program_cmd<T: QdlChan>(
         slot,
         phys_part_idx,
         start_sector,
-    )
+    )?)
 }
 
 // TODO: there's some funny optimizations to make here, such as OoO loading files into memory, or doing things while we're waiting on the device to finish
