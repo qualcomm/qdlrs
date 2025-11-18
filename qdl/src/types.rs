@@ -54,7 +54,6 @@ pub struct FirehoseConfiguration {
     pub xml_buf_size: usize,
 
     pub storage_sector_size: usize,
-    pub storage_slot: u8,
     pub storage_type: FirehoseStorageType,
 
     pub bypass_storage: bool,
@@ -74,7 +73,6 @@ impl Default for FirehoseConfiguration {
             recv_buffer_size: 4096,
             xml_buf_size: 4096,
             storage_sector_size: 512,
-            storage_slot: 0,
             storage_type: FirehoseStorageType::Emmc,
             bypass_storage: true,
             hash_packets: false,

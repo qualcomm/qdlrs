@@ -231,7 +231,6 @@ fn main() -> Result<()> {
                     }
                 }
             },
-            storage_slot: args.storage_slot,
             bypass_storage: args.bypass_storage,
             backend,
             skip_firehose_log: !args.print_firehose_log,
