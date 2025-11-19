@@ -5,7 +5,6 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use owo_colors::OwoColorize;
 use parsers::firehose_parser_ack_nak;
-use serial::setup_serial_device;
 use std::cmp::min;
 use std::io::{Read, Write};
 use std::str::{self, FromStr};
@@ -15,7 +14,6 @@ use types::FirehoseStorageType;
 use types::QdlBackend;
 use types::QdlChan;
 use types::QdlReadWrite;
-use usb::setup_usb_device;
 
 use anyhow::bail;
 use pbr::{ProgressBar, Units};
@@ -31,18 +29,23 @@ pub mod usb;
 
 pub fn setup_target_device(
     backend: QdlBackend,
-    serial_no: Option<String>,
-    port: Option<String>,
+    _serial_no: Option<String>,
+    _port: Option<String>,
 ) -> Result<Box<dyn QdlReadWrite>> {
     match backend {
-        QdlBackend::Serial => match setup_serial_device(port) {
+        #[cfg(feature = "serial")]
+        QdlBackend::Serial => match serial::setup_serial_device(_port) {
             Ok(d) => Ok(Box::new(d)),
             Err(e) => Err(e),
         },
-        QdlBackend::Usb => match setup_usb_device(serial_no) {
+        #[cfg(feature = "usb")]
+        QdlBackend::Usb => match usb::setup_usb_device(_serial_no) {
             Ok(d) => Ok(Box::new(d)),
             Err(e) => Err(e),
         },
+        // If all back-ends are compiled in, this throws a warning
+        #[allow(unreachable_patterns)]
+        _ => bail!("The {:?} backend is not supported in this build", backend),
     }
 }
 
