@@ -580,7 +580,12 @@ pub fn firehose_reset<T: QdlChan>(
         ],
     )?;
 
-    firehose_write_getack(channel, &mut xml, "reset the Device".to_owned())
+    firehose_write_getack(channel, &mut xml, "reset the Device".to_owned())?;
+
+    // Drain the incoming LOG packets to actually restart the device
+    let _ = channel.skip_until(0);
+
+    Ok(())
 }
 
 /// Mark a physical storage partition as bootable
