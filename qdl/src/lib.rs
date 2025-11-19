@@ -142,6 +142,13 @@ pub fn firehose_read<T: QdlChan>(
             if let Some(XMLNode::Element(e)) = xml.children.first() {
                 // Check for a 'log' node and print out the message
                 if e.name == "log" {
+                    // The last message within the initial logspam should be this
+                    // Try to match on it to not pay the USB xfer timeout penalty each time
+                    if let Some(val) = e.attributes.get_key_value("value")
+                        && val.1.starts_with("INFO: End of supported functions")
+                    {
+                        return Ok(FirehoseStatus::Ack);
+                    }
                     if channel.fh_config().skip_firehose_log {
                         continue;
                     }
