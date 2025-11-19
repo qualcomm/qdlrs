@@ -61,7 +61,6 @@ pub struct FirehoseConfiguration {
     pub read_back_verify: bool,
 
     pub backend: QdlBackend,
-    pub skip_usb_zlp: bool,
     pub skip_firehose_log: bool,
     pub verbose_firehose: bool,
 }
@@ -78,8 +77,6 @@ impl Default for FirehoseConfiguration {
             hash_packets: false,
             read_back_verify: false,
             backend: QdlBackend::default(),
-            // https://github.com/libusb/libusb/pull/678
-            skip_usb_zlp: cfg!(target_os = "macos"),
             skip_firehose_log: true,
             verbose_firehose: false,
         }

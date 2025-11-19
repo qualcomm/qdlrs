@@ -5,7 +5,6 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use owo_colors::OwoColorize;
 use parsers::firehose_parser_ack_nak;
-use serial::setup_serial_device;
 use std::cmp::min;
 use std::io::{Read, Write};
 use std::str::{self, FromStr};
@@ -15,7 +14,6 @@ use types::FirehoseStorageType;
 use types::QdlBackend;
 use types::QdlChan;
 use types::QdlReadWrite;
-use usb::setup_usb_device;
 
 use anyhow::bail;
 use pbr::{ProgressBar, Units};
@@ -31,18 +29,23 @@ pub mod usb;
 
 pub fn setup_target_device(
     backend: QdlBackend,
-    serial_no: Option<String>,
-    port: Option<String>,
+    _serial_no: Option<String>,
+    _port: Option<String>,
 ) -> Result<Box<dyn QdlReadWrite>> {
     match backend {
-        QdlBackend::Serial => match setup_serial_device(port) {
+        #[cfg(feature = "serial")]
+        QdlBackend::Serial => match serial::setup_serial_device(_port) {
             Ok(d) => Ok(Box::new(d)),
             Err(e) => Err(e),
         },
-        QdlBackend::Usb => match setup_usb_device(serial_no) {
+        #[cfg(feature = "usb")]
+        QdlBackend::Usb => match usb::setup_usb_device(_serial_no) {
             Ok(d) => Ok(Box::new(d)),
             Err(e) => Err(e),
         },
+        // If all back-ends are compiled in, this throws a warning
+        #[allow(unreachable_patterns)]
+        _ => bail!("The {:?} backend is not supported in this build", backend),
     }
 }
 
@@ -142,6 +145,13 @@ pub fn firehose_read<T: QdlChan>(
             if let Some(XMLNode::Element(e)) = xml.children.first() {
                 // Check for a 'log' node and print out the message
                 if e.name == "log" {
+                    // The last message within the initial logspam should be this
+                    // Try to match on it to not pay the USB xfer timeout penalty each time
+                    if let Some(val) = e.attributes.get_key_value("value")
+                        && val.1.starts_with("INFO: End of supported functions")
+                    {
+                        return Ok(FirehoseStatus::Ack);
+                    }
                     if channel.fh_config().skip_firehose_log {
                         continue;
                     }
@@ -454,7 +464,7 @@ pub fn firehose_program_storage<T: QdlChan>(
     }
 
     // Send a Zero-Length Packet to indicate end of stream
-    if channel.fh_config().backend == QdlBackend::Usb && !channel.fh_config().skip_usb_zlp {
+    if channel.fh_config().backend == QdlBackend::Usb {
         let _ = channel.write(&[]).expect("Error sending ZLP");
     }
 
@@ -580,7 +590,12 @@ pub fn firehose_reset<T: QdlChan>(
         ],
     )?;
 
-    firehose_write_getack(channel, &mut xml, "reset the Device".to_owned())
+    firehose_write_getack(channel, &mut xml, "reset the Device".to_owned())?;
+
+    // Drain the incoming LOG packets to actually restart the device
+    let _ = channel.skip_until(0);
+
+    Ok(())
 }
 
 /// Mark a physical storage partition as bootable

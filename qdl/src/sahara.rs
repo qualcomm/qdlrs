@@ -526,8 +526,7 @@ pub fn sahara_run<T: QdlChan>(
                     if req.status == 0 {
                         sahara_send_done(channel)?;
                     } else {
-                        eprintln!("Received unsuccessful End of Image packet");
-                        return Ok(vec![]);
+                        bail!("Received unsuccessful End of Image packet");
                     }
                 }
             }
