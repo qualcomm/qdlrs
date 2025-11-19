@@ -461,7 +461,7 @@ pub fn firehose_program_storage<T: QdlChan>(
     }
 
     // Send a Zero-Length Packet to indicate end of stream
-    if channel.fh_config().backend == QdlBackend::Usb && !channel.fh_config().skip_usb_zlp {
+    if channel.fh_config().backend == QdlBackend::Usb {
         let _ = channel.write(&[]).expect("Error sending ZLP");
     }
 
