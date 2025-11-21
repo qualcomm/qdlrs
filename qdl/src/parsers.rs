@@ -3,15 +3,15 @@
 
 use indexmap::IndexMap;
 
-use anyhow::bail;
 use owo_colors::OwoColorize;
 
 use crate::{
-    FirehoseResetMode, FirehoseStatus, QdlChan, firehose_configure, firehose_read, firehose_reset,
+    FirehoseError, FirehoseResetMode, FirehoseStatus, NakError, QdlChan, firehose_configure,
+    firehose_read, firehose_reset,
 };
 
 /// The highest protocol version currently supported by the library
-const FH_PROTO_VERSION_SUPPORTED: u32 = 1;
+pub(crate) const FH_PROTO_VERSION_SUPPORTED: u32 = 1;
 
 // Parsers are kept separate for more flexibility (e.g. log replay analysis)
 
@@ -19,12 +19,12 @@ const FH_PROTO_VERSION_SUPPORTED: u32 = 1;
 pub fn firehose_parser_ack_nak<T: QdlChan>(
     _: &mut T,
     attrs: &IndexMap<String, String>,
-) -> Result<FirehoseStatus, anyhow::Error> {
+) -> Result<FirehoseStatus, FirehoseError> {
     let val = attrs.get("value").to_owned();
     match &val.unwrap()[..] {
         "ACK" => Ok(FirehoseStatus::Ack),
         "NAK" => Ok(FirehoseStatus::Nak),
-        _ => bail!("Got malformed data: {:?}", attrs),
+        _ => Err(FirehoseError::MalformedData(attrs.clone())),
     }
 }
 
@@ -32,7 +32,7 @@ pub fn firehose_parser_ack_nak<T: QdlChan>(
 pub fn firehose_parser_configure_response<T: QdlChan>(
     channel: &mut T,
     attrs: &IndexMap<String, String>,
-) -> Result<FirehoseStatus, anyhow::Error> {
+) -> Result<FirehoseStatus, FirehoseError> {
     if let Ok(status) = firehose_parser_ack_nak(channel, attrs) {
         // The device can't handle that big of a buffer and it auto-reconfigures to the max it can
         if status == FirehoseStatus::Nak {
@@ -40,7 +40,7 @@ pub fn firehose_parser_configure_response<T: QdlChan>(
                 channel.mut_fh_config().send_buffer_size = val.parse::<usize>().unwrap();
             } else {
                 firehose_reset(channel, &FirehoseResetMode::ResetToEdl, 0)?;
-                bail!("firehose <configure> failed, try again with  --verbose-firehose")
+                return Err(FirehoseError::Nak(NakError::Configure));
             }
         }
     }
@@ -62,11 +62,9 @@ pub fn firehose_parser_configure_response<T: QdlChan>(
     println!("Found protocol version {}", version.bright_blue());
 
     if min_version_supported < FH_PROTO_VERSION_SUPPORTED {
-        bail!(
-            "Device requires protocol version >= {}, the library only supports up to v{}",
-            min_version_supported.bright_red(),
-            FH_PROTO_VERSION_SUPPORTED.bright_blue()
-        );
+        return Err(FirehoseError::ProtocolVersionIncompatibility {
+            device_min_version: min_version_supported,
+        });
     }
 
     // TODO: MaxPayloadSizeFromTargetInBytes seems useless when xfers are abstracted through libusb

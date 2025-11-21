@@ -2,14 +2,17 @@
 // Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 use std::{
     fmt::Display,
-    io::{BufRead, ErrorKind, Read, Write},
+    io::{BufRead, Read, Write},
     str::FromStr,
 };
 
-use anyhow::{Error, bail};
 use owo_colors::OwoColorize;
 
 use crate::firehose_reset;
+
+#[derive(Debug, thiserror::Error)]
+#[error("Unknown variant: {0}")]
+pub struct UnknownStringVariant(&'static str);
 
 /// Common respones indicating success/failure respectively
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -26,22 +29,23 @@ pub enum QdlBackend {
 }
 
 impl FromStr for QdlBackend {
-    type Err = anyhow::Error;
+    type Err = UnknownStringVariant;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "serial" => Ok(QdlBackend::Serial),
             "usb" => Ok(QdlBackend::Usb),
-            _ => bail!("Unknown backend"),
+            _ => Err(UnknownStringVariant("Firehose backend")),
         }
     }
 }
 
 impl Default for QdlBackend {
     fn default() -> Self {
-        match cfg!(target_os = "windows") {
-            true => QdlBackend::Serial,
-            false => QdlBackend::Usb,
+        if cfg!(target_os = "windows") {
+            QdlBackend::Serial
+        } else {
+            QdlBackend::Usb
         }
     }
 }
@@ -179,7 +183,7 @@ pub enum FirehoseStorageType {
 }
 
 impl FromStr for FirehoseStorageType {
-    type Err = Error;
+    type Err = UnknownStringVariant;
 
     fn from_str(input: &str) -> Result<FirehoseStorageType, Self::Err> {
         match input {
@@ -188,7 +192,7 @@ impl FromStr for FirehoseStorageType {
             "nand" => Ok(FirehoseStorageType::Nand),
             "nvme" => Ok(FirehoseStorageType::Nvme),
             "spinor" => Ok(FirehoseStorageType::Spinor),
-            _ => bail!("Unknown storage type"),
+            _ => Err(UnknownStringVariant("Firehose storage type")),
         }
     }
 }
@@ -213,14 +217,14 @@ pub enum FirehoseResetMode {
 }
 
 impl FromStr for FirehoseResetMode {
-    type Err = anyhow::Error;
+    type Err = UnknownStringVariant;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "edl" => Ok(FirehoseResetMode::ResetToEdl),
             "system" => Ok(FirehoseResetMode::Reset),
             "off" => Ok(FirehoseResetMode::Off),
-            _ => Err(std::io::Error::from(ErrorKind::InvalidInput).into()),
+            _ => Err(UnknownStringVariant("Firehose reset mode")),
         }
     }
 }
