@@ -53,12 +53,9 @@ pub(crate) fn run_flash<T: QdlChan>(
     }
 
     // Mark the correct LUN (or any other kind of physical partition) as bootable
-    if bootable_part_idx.is_some() {
-        println!(
-            "Setting partition {} as bootable!",
-            bootable_part_idx.unwrap()
-        );
-        firehose_set_bootable(channel, bootable_part_idx.unwrap())?;
+    if let Some(bootable_part_idx) = bootable_part_idx {
+        println!("Setting partition {} as bootable!", bootable_part_idx);
+        firehose_set_bootable(channel, bootable_part_idx)?;
     }
 
     Ok(())
