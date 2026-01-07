@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use anyhow::{Result, bail};
 
-use clap::{Parser, command};
+use clap::Parser;
 use qdl::{
     self,
     sahara::{SaharaMode, sahara_reset, sahara_run},
