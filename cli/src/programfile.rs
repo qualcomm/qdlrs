@@ -58,8 +58,10 @@ fn parse_patch_cmd<T: QdlChan>(
     verbose: bool,
 ) -> anyhow::Result<()> {
     if let Some(filename) = attrs.get("filename") {
-        if filename != "DISK" && verbose {
-            println!("Skipping <patch> tag trying to alter {filename} on Host filesystem");
+        if filename != "DISK" {
+            if verbose {
+                println!("Skipping <patch> tag trying to alter {filename} on Host filesystem");
+            }
             return Ok(());
         }
     } else {
