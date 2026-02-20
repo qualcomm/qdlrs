@@ -159,56 +159,132 @@ fn parse_program_cmd<T: Read + Write + QdlChan>(
         let header = FileHeader::from_bytes(&header_bytes)?;
 
         let mut offset: usize = 0;
-        let start_sector = start_sector.parse::<usize>()?;
+        let start_sector_base = start_sector.parse::<usize>()?;
+
+        let mut agg_data = Vec::new();
+        let mut agg_start_sector = 0;
+        let mut agg_num_sectors = 0;
+
         for index in 0..header.chunks {
-            let label_sparse = format!("{label}_{index}");
             let mut chunk_bytes = ChunkHeaderBytes::default();
             buf.read_exact(&mut chunk_bytes)?;
             let chunk = ChunkHeader::from_bytes(&chunk_bytes)?;
 
             let out_size = chunk.out_size(&header);
             let num_sectors = out_size / sector_size;
-            let start_offset = start_sector + offset;
-            match chunk.chunk_type {
-                ChunkType::Raw => {
-                    firehose_program_storage(
-                        channel,
-                        &mut buf,
-                        &label_sparse,
-                        num_sectors,
-                        phys_part_idx,
-                        start_offset.to_string().as_str(),
-                    )?;
-                }
-                ChunkType::Fill => {
-                    let mut fill_value = [0u8; 4];
-                    buf.read_exact(&mut fill_value)?;
+            let current_start_sector = start_sector_base + offset;
 
-                    let mut fill_vec = Vec::<u8>::with_capacity(out_size);
-                    for _ in 0..out_size / 4 {
-                        fill_vec.extend_from_slice(&fill_value[..]);
+            match chunk.chunk_type {
+                ChunkType::Raw | ChunkType::Fill => {
+                    let is_large = out_size > channel.fh_config().send_buffer_size;
+                    let is_contiguous = agg_num_sectors > 0
+                        && (agg_start_sector + agg_num_sectors == current_start_sector);
+                    let would_overflow =
+                        agg_data.len() + out_size > channel.fh_config().send_buffer_size;
+
+                    if !is_contiguous || would_overflow || is_large {
+                        if agg_num_sectors > 0 {
+                            firehose_program_storage(
+                                channel,
+                                &mut &agg_data[..],
+                                &format!("{label}_merged"),
+                                agg_num_sectors,
+                                phys_part_idx,
+                                agg_start_sector.to_string().as_str(),
+                            )?;
+                            agg_data.clear();
+                            agg_num_sectors = 0;
+                        }
                     }
 
-                    firehose_program_storage(
-                        channel,
-                        &mut &fill_vec[..],
-                        &label_sparse,
-                        num_sectors,
-                        phys_part_idx,
-                        start_offset.to_string().as_str(),
-                    )?;
+                    if is_large {
+                        if chunk.chunk_type == ChunkType::Raw {
+                            firehose_program_storage(
+                                channel,
+                                &mut buf,
+                                &format!("{label}_{index}"),
+                                num_sectors,
+                                phys_part_idx,
+                                current_start_sector.to_string().as_str(),
+                            )?;
+                        } else {
+                            let mut fill_value = [0u8; 4];
+                            buf.read_exact(&mut fill_value)?;
+
+                            let mut fill_vec = Vec::<u8>::with_capacity(out_size);
+                            for _ in 0..out_size / 4 {
+                                fill_vec.extend_from_slice(&fill_value[..]);
+                            }
+
+                            firehose_program_storage(
+                                channel,
+                                &mut &fill_vec[..],
+                                &format!("{label}_{index}"),
+                                num_sectors,
+                                phys_part_idx,
+                                current_start_sector.to_string().as_str(),
+                            )?;
+                        }
+                    } else {
+                        if agg_num_sectors == 0 {
+                            agg_start_sector = current_start_sector;
+                        }
+                        if chunk.chunk_type == ChunkType::Raw {
+                            let mut tmp = vec![0u8; out_size];
+                            buf.read_exact(&mut tmp)?;
+                            agg_data.extend(tmp);
+                        } else {
+                            let mut fill_value = [0u8; 4];
+                            buf.read_exact(&mut fill_value)?;
+                            for _ in 0..out_size / 4 {
+                                agg_data.extend_from_slice(&fill_value[..]);
+                            }
+                        }
+                        agg_num_sectors += num_sectors;
+                    }
                 }
                 ChunkType::DontCare => {
-                    // Don't Care, skip
+                     // Fill gaps up to 256KB
+                    let is_small_gap = out_size <= 256 * 1024;
+                    let would_overflow =
+                        agg_data.len() + out_size > channel.fh_config().send_buffer_size;
+
+                    if agg_num_sectors > 0 && is_small_gap && !would_overflow {
+                        // Fill gap with zeros to keep aggregation going
+                        agg_data.resize(agg_data.len() + out_size, 0);
+                        agg_num_sectors += num_sectors;
+                    } else if agg_num_sectors > 0 {
+                        firehose_program_storage(
+                            channel,
+                            &mut &agg_data[..],
+                            &format!("{label}_merged"),
+                            agg_num_sectors,
+                            phys_part_idx,
+                            agg_start_sector.to_string().as_str(),
+                        )?;
+                        agg_data.clear();
+                        agg_num_sectors = 0;
+                    }
                 }
                 ChunkType::Crc32 => {
-                    // Not supported, on qcom tools is ignored, seek if present
                     buf.seek_relative(4)?;
                 }
             }
 
-            offset += out_size;
+            offset += num_sectors;
         }
+
+        if agg_num_sectors > 0 {
+            firehose_program_storage(
+                channel,
+                &mut &agg_data[..],
+                &format!("{label}_merged"),
+                agg_num_sectors,
+                phys_part_idx,
+                agg_start_sector.to_string().as_str(),
+            )?;
+        }
+
         return Ok(());
     }
 
