@@ -11,8 +11,32 @@ use xmltree::{self, Element, XMLNode};
 
 use qdl::{
     firehose_checksum_storage, firehose_patch, firehose_program_storage, firehose_read_storage,
-    types::QdlChan,
+    firehose_erase_storage, types::QdlChan,
 };
+
+fn parse_erase_cmd<T: QdlChan>(
+    channel: &mut T,
+    attrs: &IndexMap<String, String>,
+) -> anyhow::Result<()> {
+    let num_sectors = attrs
+        .get("num_partition_sectors")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap();
+    let phys_part_idx = attrs
+        .get("physical_partition_number")
+        .unwrap()
+        .parse::<u8>()
+        .unwrap();
+    let start_sector = attrs.get("start_sector").unwrap();
+
+    firehose_erase_storage(
+        channel,
+        num_sectors,
+        phys_part_idx,
+        start_sector,
+    )
+}
 
 fn parse_read_cmd<T: QdlChan>(
     channel: &mut T,
@@ -207,6 +231,7 @@ pub fn parse_program_xml<T: QdlChan>(
     for node in xml.children.iter() {
         if let XMLNode::Element(e) = node {
             match e.name.to_lowercase().as_str() {
+                "erase" => parse_erase_cmd(channel, &e.attributes)?,
                 "getsha256digest" => parse_read_cmd(channel, out_dir, &e.attributes, true)?,
                 "patch" => parse_patch_cmd(channel, &e.attributes, verbose)?,
                 "program" => parse_program_cmd(

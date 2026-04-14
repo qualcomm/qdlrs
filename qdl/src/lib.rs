@@ -400,6 +400,29 @@ pub fn firehose_poke<T: QdlChan>(
     firehose_write_getack(channel, &mut xml, format!("peek @ {addr:#x}"))
 }
 
+/// Erase Device storage
+pub fn firehose_erase_storage<T: QdlChan>(
+    channel: &mut T,
+    num_sectors: usize,
+    phys_part_idx: u8,
+    start_sector: &str,
+) -> anyhow::Result<()> {
+    let mut xml = firehose_xml_setup(
+        "erase",
+        &[
+            (
+                "SECTOR_SIZE_IN_BYTES",
+                &channel.fh_config().storage_sector_size.to_string(),
+            ),
+            ("num_partition_sectors", &num_sectors.to_string()),
+            ("physical_partition_number", &phys_part_idx.to_string()),
+            ("start_sector", start_sector),
+        ],
+    )?;
+
+    firehose_write_getack(channel, &mut xml, format!("erase sectors {start_sector}..{start_sector}+{num_sectors}"))
+}
+
 /// Write to Device storage
 pub fn firehose_program_storage<T: QdlChan>(
     channel: &mut T,

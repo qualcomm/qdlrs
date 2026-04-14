@@ -11,7 +11,7 @@ use qdl::types::{FirehoseResetMode, FirehoseStorageType, QdlBackend, QdlDevice};
 use qdl::{firehose_configure, firehose_read, firehose_reset, types::FirehoseConfiguration};
 use qdl::{
     firehose_get_default_sector_size, firehose_nop, firehose_peek, firehose_program_storage,
-    firehose_set_bootable, setup_target_device,
+    firehose_erase_storage, firehose_set_bootable, setup_target_device,
 };
 use util::{
     find_part, print_partition_table, read_gpt_from_storage, read_storage_logical_partition,
@@ -334,12 +334,9 @@ fn main() -> Result<()> {
         Command::Erase { name } => {
             let part = find_part(&mut qdl_dev, &name, args.storage_slot, args.phys_part_idx)?;
 
-            firehose_program_storage(
+            firehose_erase_storage(
                 &mut qdl_dev,
-                &mut &[0u8][..],
-                &name,
                 (part.ending_lba - part.starting_lba + 1) as usize,
-                args.storage_slot,
                 args.phys_part_idx,
                 &part.starting_lba.to_string(),
             )?;
