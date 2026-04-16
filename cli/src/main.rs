@@ -11,7 +11,7 @@ use qdl::types::{FirehoseResetMode, FirehoseStorageType, QdlBackend, QdlDevice};
 use qdl::{firehose_configure, firehose_read, firehose_reset, types::FirehoseConfiguration};
 use qdl::{
     firehose_get_default_sector_size, firehose_nop, firehose_peek, firehose_program_storage,
-    firehose_set_bootable, setup_target_device,
+    firehose_set_bootable, load_programmer_images, setup_target_device,
 };
 use util::{
     find_part, print_partition_table, read_gpt_from_storage, read_storage_logical_partition,
@@ -197,7 +197,7 @@ fn main() -> Result<()> {
     let reset_mode = FirehoseResetMode::from_str(&args.reset_mode)?;
 
     // Get the MBN loader binary
-    let mbn_loader = match fs::read(args.loader_path) {
+    let mut mbn_loader = match load_programmer_images(&args.loader_path) {
         Ok(m) => m,
         Err(e) => bail!("Couldn't open the programmer binary: {}", e.to_string()),
     };
@@ -277,7 +277,7 @@ fn main() -> Result<()> {
         &mut qdl_dev,
         SaharaMode::WaitingForImage,
         None,
-        &mut [mbn_loader],
+        &mut mbn_loader,
         vec![],
         args.verbose_sahara,
     )?;
