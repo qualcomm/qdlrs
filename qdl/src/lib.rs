@@ -176,7 +176,14 @@ pub fn firehose_read<T: QdlChan>(
 
                 // TODO: Use std::intrinsics::unlikely after it exits nightly
                 if e.attributes.get("AttemptRetry").is_some() {
-                    return firehose_read::<T>(channel, response_parser);
+                    // LTBox patch: upstream does a tail call
+                    // (`return firehose_read(channel, response_parser);`)
+                    // which, without guaranteed TCO in Rust, grows the
+                    // stack every retry and blows past any reasonable
+                    // thread stack if the device keeps asking for more.
+                    // Loop back to the top of the outer `loop { ... }`
+                    // instead — `pending` was already cleared above.
+                    continue;
                 } else if e.attributes.get("AttemptRestart").is_some() {
                     // TODO: handle this automagically
                     firehose_reset(channel, &FirehoseResetMode::ResetToEdl, 0)?;
@@ -208,8 +215,14 @@ pub fn firehose_write<T: QdlChan>(channel: &mut T, buf: &mut [u8]) -> anyhow::Re
 
     match channel.write_all(&b) {
         Ok(_) => Ok(()),
-        // Assume FH will hang after NAK..
-        Err(_) => firehose_reset(channel, &FirehoseResetMode::ResetToEdl, 0),
+        // LTBox patch: upstream recovers by calling `firehose_reset`
+        // here, but `firehose_reset` routes right back through
+        // `firehose_write_getack` → `firehose_write`. If the underlying
+        // transport stays broken (USB disconnect mid-flash is the
+        // common case), the two functions call each other until the
+        // stack overflows. Surface the original error instead and let
+        // the caller decide how to recover.
+        Err(e) => Err(e.into()),
     }
 }
 
