@@ -85,13 +85,8 @@ pub fn firehose_read<T: QdlChan>(
             Err(e) => match e.kind() {
                 // In some cases (like with welcome messages), there's no acking
                 // and a timeout is the "end of data" marker instead..
-                std::io::ErrorKind::TimedOut => {
-                    if got_any_data {
-                        return Ok(FirehoseStatus::Ack);
-                    } else {
-                        return Err(e.into());
-                    }
-                }
+                std::io::ErrorKind::TimedOut if got_any_data => return Ok(FirehoseStatus::Ack),
+                std::io::ErrorKind::TimedOut => return Err(e.into()),
                 _ => return Err(e.into()),
             },
         };
