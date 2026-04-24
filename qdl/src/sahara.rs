@@ -219,13 +219,15 @@ pub struct RamdumpTable64 {
 
 pub fn sahara_send_img_to_device<T: Read + Write>(
     channel: &mut T,
-    img_arr: &mut [Vec<u8>],
+    img_arr: &mut [Option<Vec<u8>>],
     image_idx: u64,
     image_offset: u64,
     image_len: u64,
 ) -> Result<usize, anyhow::Error> {
     let image = if img_arr.len() == 1 { 0 } else { image_idx };
-    let buf = &mut img_arr[image as usize];
+    let Some(Some(buf)) = img_arr.get(image as usize) else {
+        bail!("Sahara requested missing image ID {}", image_idx,);
+    };
     if (image_offset + image_len) as usize > buf.len() {
         bail!(
             "Attempted OOB read {} > {}",
@@ -480,7 +482,7 @@ pub fn sahara_run<T: QdlChan>(
     channel: &mut T,
     sahara_mode: SaharaMode,
     sahara_command: Option<SaharaCmdModeCmd>,
-    images: &mut [Vec<u8>],
+    images: &mut [Option<Vec<u8>>],
     filenames: Vec<String>,
     verbose: bool,
 ) -> Result<Vec<u8>> {

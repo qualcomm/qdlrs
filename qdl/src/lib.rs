@@ -2,11 +2,14 @@
 // Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 use anstream::println;
 use anyhow::Result;
-use indexmap::IndexMap;
+use indexmap::{Equivalent, IndexMap};
 use owo_colors::OwoColorize;
 use parsers::firehose_parser_ack_nak;
+use serde::{Deserialize, Serialize};
 use std::cmp::min;
+use std::fs;
 use std::io::{Read, Write};
+use std::path::Path;
 use std::str::{self, FromStr};
 use types::FirehoseResetMode;
 use types::FirehoseStatus;
@@ -26,6 +29,132 @@ pub mod serial;
 pub mod types;
 #[cfg(feature = "usb")]
 pub mod usb;
+
+pub const SAHARA_ID_EHOSTDL_IMG: usize = 13;
+
+const CPIO_MAGIC: &[u8; 6] = b"070701";
+
+#[repr(C)]
+#[derive(Debug, Serialize, Deserialize)]
+struct CpioNewcHeader {
+    c_magic: [u8; 6],
+    c_ino: [u8; 8],
+    c_mode: [u8; 8],
+    c_uid: [u8; 8],
+    c_gid: [u8; 8],
+    c_nlink: [u8; 8],
+    c_mtime: [u8; 8],
+    c_filesize: [u8; 8],
+    c_devmajor: [u8; 8],
+    c_devminor: [u8; 8],
+    c_rdevmajor: [u8; 8],
+    c_rdevminor: [u8; 8],
+    c_namesize: [u8; 8],
+    c_check: [u8; 8],
+}
+
+fn align_up_4(n: usize) -> usize {
+    (n + 3) & !3
+}
+
+fn parse_ascii_hex_u32(field: &[u8]) -> Result<u32> {
+    let s = std::str::from_utf8(field)?;
+    if s.len() != 8 {
+        bail!("invalid cpio header field size");
+    }
+
+    u32::from_str_radix(s, 16).map_err(|_| anyhow::anyhow!("invalid hex field \"{}\"", s))
+}
+
+fn decode_programmer_archive(blob: &[u8], images: &mut Vec<Option<Vec<u8>>>) -> Result<bool> {
+    if blob.len() < size_of::<CpioNewcHeader>() || &blob[..6] != CPIO_MAGIC {
+        return Ok(false);
+    }
+
+    let mut ptr = 0usize;
+
+    loop {
+        if ptr + size_of::<CpioNewcHeader>() > blob.len() {
+            bail!("programmer archive is truncated");
+        }
+
+        let hdr =
+            bincode::deserialize::<CpioNewcHeader>(&blob[ptr..ptr + size_of::<CpioNewcHeader>()])?;
+        if !hdr.c_magic.equivalent(CPIO_MAGIC) {
+            bail!("expected cpio header in programmer archive");
+        }
+
+        let filesize = parse_ascii_hex_u32(&hdr.c_filesize)? as usize;
+        let namesize = parse_ascii_hex_u32(&hdr.c_namesize)? as usize;
+
+        ptr += size_of::<CpioNewcHeader>();
+        if ptr + namesize > blob.len() {
+            bail!("programmer archive is truncated");
+        }
+
+        if namesize == 0 {
+            bail!("missing filename in programmer archive entry");
+        }
+
+        let name_raw = &blob[ptr..ptr + namesize];
+        let name_end = name_raw
+            .iter()
+            .position(|b| *b == 0)
+            .unwrap_or(name_raw.len());
+        let name = std::str::from_utf8(&name_raw[..name_end])
+            .map_err(|_| anyhow::anyhow!("invalid utf8 in programmer archive filename"))?;
+
+        if name == "TRAILER!!!" {
+            break;
+        }
+
+        let id_str = name.split(':').next().unwrap_or("");
+        if id_str.is_empty() {
+            bail!("missing image id in programmer archive entry");
+        }
+
+        let id = id_str
+            .parse::<u32>()
+            .map_err(|_| anyhow::anyhow!("invalid decimal image id \"{}\"", id_str))?;
+        if id == 0 {
+            bail!("invalid image id \"{}\" in programmer archive", id_str);
+        }
+
+        ptr += namesize;
+        ptr = align_up_4(ptr);
+        if ptr + filesize > blob.len() {
+            bail!("programmer archive is truncated");
+        }
+
+        let file_data = &blob[ptr..ptr + filesize];
+        if id as usize >= images.len() {
+            images.resize(id as usize + 1, None);
+        }
+        images[id as usize] = Some(file_data.to_vec());
+
+        ptr += filesize;
+        ptr = align_up_4(ptr);
+    }
+
+    Ok(true)
+}
+
+/// Load Sahara programmer image(s) from disk.
+///
+/// If `path` points to a CPIO `newc` archive, this decodes entries named like
+/// `<id>:<name>` (or just `<id>`) and stores each file in its Sahara image slot.
+/// Otherwise, the file is returned as a single-slot image list, preserving
+/// legacy single-image Sahara behavior.
+pub fn load_programmer_images(path: impl AsRef<Path>) -> Result<Vec<Option<Vec<u8>>>> {
+    let blob = fs::read(path.as_ref())?;
+    let mut images: Vec<Option<Vec<u8>>> = Vec::new();
+
+    if decode_programmer_archive(&blob, &mut images)? {
+        return Ok(images);
+    }
+
+    Ok(vec![Some(blob)])
+}
 
 pub fn setup_target_device(
     backend: QdlBackend,
@@ -85,13 +214,8 @@ pub fn firehose_read<T: QdlChan>(
             Err(e) => match e.kind() {
                 // In some cases (like with welcome messages), there's no acking
                 // and a timeout is the "end of data" marker instead..
-                std::io::ErrorKind::TimedOut => {
-                    if got_any_data {
-                        return Ok(FirehoseStatus::Ack);
-                    } else {
-                        return Err(e.into());
-                    }
-                }
+                std::io::ErrorKind::TimedOut if got_any_data => return Ok(FirehoseStatus::Ack),
+                std::io::ErrorKind::TimedOut => return Err(e.into()),
                 _ => return Err(e.into()),
             },
         };
