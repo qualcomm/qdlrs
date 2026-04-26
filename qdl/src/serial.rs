@@ -66,12 +66,35 @@ pub fn setup_serial_device(dev_path: Option<String>) -> Result<QdlSerialConfig> 
     if dev_path.is_none() {
         bail!("Serial port path unspecified");
     }
+    let path = dev_path.unwrap();
 
-    let serport = SerialPort::open(dev_path.unwrap(), |mut settings: serial2::Settings| {
-        settings.set_raw();
-        settings.set_baud_rate(115200)?;
-        Ok(settings)
-    })?;
+    // Two-stage open so a partial-apply termios error doesn't kill
+    // the session before any byte flows.
+    //
+    // Stage 1: open with an identity settings callback (returns
+    // current termios verbatim). serial2's `set_configuration`
+    // path will then write back what it just read, so its strict
+    // readback `matches_requested` check trivially passes — no
+    // matter how exotic the kernel driver is about which bits it
+    // actually honours.
+    //
+    // Stage 2: best-effort apply raw + 115200 baud. If the kernel
+    // driver silently downgrades any bit (qcserial under VMware
+    // USB passthrough is the confirmed culprit, where serial2 errors
+    // out with `failed to apply some or all settings`), log to
+    // stderr and proceed: Sahara/Firehose is a raw byte stream over
+    // USB-CDC, and the kernel termios layer is advisory for those
+    // drivers. The bytes still flow.
+    let mut serport = SerialPort::open(&path, |s| Ok(s))?;
+    if let Ok(mut applied) = serport.get_configuration() {
+        applied.set_raw();
+        let _ = applied.set_baud_rate(115200);
+        if let Err(e) = serport.set_configuration(&applied) {
+            eprintln!(
+                "[qdl] serial: best-effort termios apply on {path} failed ({e}); proceeding (kernel termios is advisory for USB-CDC drivers)"
+            );
+        }
+    }
 
     Ok(QdlSerialConfig {
         serport,
