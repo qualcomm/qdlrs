@@ -606,7 +606,7 @@ pub fn firehose_checksum_storage<T: QdlChan>(
     channel: &mut T,
     num_sectors: usize,
     phys_part_idx: u8,
-    start_sector: u32,
+    start_sector: u64,
 ) -> anyhow::Result<()> {
     let mut xml = firehose_xml_setup(
         "getsha256digest",
@@ -638,7 +638,7 @@ pub fn firehose_read_storage(
     num_sectors: usize,
     slot: u8,
     phys_part_idx: u8,
-    start_sector: u32,
+    start_sector: u64,
 ) -> anyhow::Result<()> {
     let mut bytes_left = num_sectors * channel.fh_config().storage_sector_size;
     let mut xml = firehose_xml_setup(

@@ -107,6 +107,6 @@ pub fn read_storage_logical_partition<T: QdlChan>(
         (part.ending_lba - part.starting_lba + 1) as usize,
         slot,
         phys_part_idx,
-        part.starting_lba as u32,
+        part.starting_lba,
     )
 }

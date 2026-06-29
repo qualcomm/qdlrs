@@ -31,7 +31,7 @@ fn parse_read_cmd<T: QdlChan>(
         .unwrap()
         .parse::<u8>()
         .unwrap();
-    let start_sector = attrs.get("start_sector").unwrap().parse::<u32>().unwrap();
+    let start_sector = attrs.get("start_sector").unwrap().parse::<u64>().unwrap();
 
     if checksum_only {
         return firehose_checksum_storage(channel, num_sectors, phys_part_idx, start_sector);
