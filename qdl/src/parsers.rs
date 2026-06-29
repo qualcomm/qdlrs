@@ -61,7 +61,7 @@ pub fn firehose_parser_configure_response<T: QdlChan>(
 
     println!("Found protocol version {}", version.bright_blue());
 
-    if min_version_supported < FH_PROTO_VERSION_SUPPORTED {
+    if min_version_supported > FH_PROTO_VERSION_SUPPORTED {
         bail!(
             "Device requires protocol version >= {}, the library only supports up to v{}",
             min_version_supported.bright_red(),
