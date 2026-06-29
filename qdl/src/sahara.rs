@@ -237,7 +237,8 @@ pub fn sahara_send_img_to_device<T: Read + Write>(
     }
 
     channel
-        .write(&buf[image_offset as usize..(image_offset + image_len) as usize])
+        .write_all(&buf[image_offset as usize..(image_offset + image_len) as usize])
+        .map(|_| image_len as usize)
         .map_err(|e| e.into())
 }
 
@@ -253,8 +254,11 @@ fn sahara_send_generic<T: Read + Write>(
         body,
     };
 
+    let serialized = serialize(&pkt).expect("Error serializing packet");
+    let len = serialized.len();
     channel
-        .write(&serialize(&pkt).expect("Error serializing packet"))
+        .write_all(&serialized)
+        .map(|_| len)
         .map_err(|e| e.into())
 }
 
