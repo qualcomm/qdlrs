@@ -83,9 +83,14 @@ fn find_usb_handle_by_sn(
     let mut dev: Option<DeviceInfo> = None;
 
     for d in devices {
-        // let prod_str = dh.read_product_string_ascii(&d.device_descriptor().unwrap())?;
         if let Some(prod_str) = d.product_string() {
-            let sn = &prod_str[prod_str.find("_SN:").unwrap() + "_SN:".len()..];
+            let Some(sn_pos) = prod_str.find("_SN:") else {
+                println!(
+                    "Found an EDL device without a '_SN:' fragment in the product string, skipping"
+                );
+                continue;
+            };
+            let sn = &prod_str[sn_pos + "_SN:".len()..];
             if sn.eq_ignore_ascii_case(&serial_no) {
                 dev = Some(d);
                 break;
