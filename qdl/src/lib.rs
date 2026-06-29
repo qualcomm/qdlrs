@@ -300,7 +300,9 @@ pub fn firehose_read<T: QdlChan>(
 
                 // TODO: Use std::intrinsics::unlikely after it exits nightly
                 if e.attributes.get("AttemptRetry").is_some() {
-                    return firehose_read::<T>(channel, response_parser);
+                    // Restart the outer loop instead of recursing to avoid stack overflow
+                    got_any_data = false;
+                    continue;
                 } else if e.attributes.get("AttemptRestart").is_some() {
                     // TODO: handle this automagically
                     firehose_reset(channel, &FirehoseResetMode::ResetToEdl, 0)?;
