@@ -581,7 +581,9 @@ pub fn firehose_program_storage<T: QdlChan>(
         ];
         let _ = data.read(&mut buf).unwrap();
 
-        let n = channel.write(&buf).expect("Error sending data");
+        let n = channel
+            .write(&buf)
+            .with_context(|| format!("Error sending data for partition {label}"))?;
         if n != chunk_size_sectors * channel.fh_config().storage_sector_size {
             bail!("Wrote an unexpected number of bytes ({})", n);
         }
@@ -592,7 +594,7 @@ pub fn firehose_program_storage<T: QdlChan>(
 
     // Send a Zero-Length Packet to indicate end of stream
     if channel.fh_config().backend == QdlBackend::Usb {
-        let _ = channel.write(&[]).expect("Error sending ZLP");
+        channel.write(&[]).context("Error sending ZLP")?;
     }
 
     if firehose_read::<T>(channel, firehose_parser_ack_nak)? != FirehoseStatus::Ack {
