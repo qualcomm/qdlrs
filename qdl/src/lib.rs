@@ -523,7 +523,7 @@ pub fn firehose_poke<T: QdlChan>(
         ],
     )?;
 
-    firehose_write_getack(channel, &mut xml, format!("peek @ {addr:#x}"))
+    firehose_write_getack(channel, &mut xml, format!("poke @ {addr:#x}"))
 }
 
 /// Write to Device storage
