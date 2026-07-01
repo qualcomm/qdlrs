@@ -397,7 +397,7 @@ pub fn firehose_configure<T: QdlChan>(
     // Sanity requirement
     assert!(
         config
-            .send_buffer_size
+            .recv_buffer_size
             .is_multiple_of(config.storage_sector_size)
     );
     let mut xml = firehose_xml_setup(
