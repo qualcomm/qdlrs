@@ -20,10 +20,10 @@ pub fn firehose_parser_ack_nak<T: QdlChan>(
     _: &mut T,
     attrs: &IndexMap<String, String>,
 ) -> Result<FirehoseStatus, anyhow::Error> {
-    let val = attrs.get("value").to_owned();
-    match &val.unwrap()[..] {
-        "ACK" => Ok(FirehoseStatus::Ack),
-        "NAK" => Ok(FirehoseStatus::Nak),
+    let val = attrs.get("value");
+    match val.map(|s| s.as_str()) {
+        Some("ACK") => Ok(FirehoseStatus::Ack),
+        Some("NAK") => Ok(FirehoseStatus::Nak),
         _ => bail!("Got malformed data: {:?}", attrs),
     }
 }
