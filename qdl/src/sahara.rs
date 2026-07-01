@@ -611,7 +611,7 @@ fn sahara_parse_packet(buf: &[u8], verbose: bool) -> Result<SaharaPacket> {
         .ok_or_else(|| anyhow!("Malformed packet, too short: {buf:?}"))?;
 
     let cmd = bincode::deserialize::<SaharaCmd>(cmd)
-        .unwrap_or_else(|_| panic!("Got unknown command {}", u32::from_le_bytes(*cmd)));
+        .map_err(|_| anyhow!("Got unknown command {}", u32::from_le_bytes(*cmd)))?;
 
     let ret = SaharaPacket {
         cmd,
