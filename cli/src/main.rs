@@ -256,7 +256,11 @@ fn main() -> Result<()> {
         vec![],
         args.verbose_sahara,
     )?;
-    let sn = u32::from_le_bytes([sn[0], sn[1], sn[2], sn[3]]);
+    let sn: [u8; 4] = sn
+        .get(..4)
+        .and_then(|s| s.try_into().ok())
+        .ok_or_else(|| anyhow::anyhow!("Device returned a truncated serial number"))?;
+    let sn = u32::from_le_bytes(sn);
     println!("Chip serial number: 0x{sn:x}");
 
     let key_hash = sahara_run(
