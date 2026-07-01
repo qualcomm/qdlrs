@@ -147,7 +147,8 @@ fn decode_programmer_archive(blob: &[u8], images: &mut Vec<Option<Vec<u8>>>) -> 
 /// Otherwise, the file is returned as a single-slot image list, preserving
 /// legacy single-image Sahara behavior.
 pub fn load_programmer_images(path: impl AsRef<Path>) -> Result<Vec<Option<Vec<u8>>>> {
-    let blob = fs::read(path.as_ref())?;
+    let blob = fs::read(path.as_ref())
+        .with_context(|| format!("Couldn't read programmer image {}", path.as_ref().display()))?;
     let mut images: Vec<Option<Vec<u8>>> = Vec::new();
 
     if decode_programmer_archive(&blob, &mut images)? {

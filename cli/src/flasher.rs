@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use programfile::parse_program_xml;
 use qdl::firehose_set_bootable;
 use qdl::types::QdlChan;
@@ -36,8 +36,10 @@ pub(crate) fn run_flash<T: QdlChan>(
 
         // Get the program files that we need
         let program_file_dir = path.parent().unwrap();
-        let program_file = fs::read(path)?;
-        let xml = xmltree::Element::parse(&program_file[..])?;
+        let program_file = fs::read(path)
+            .with_context(|| format!("Couldn't read program file {}", path.display()))?;
+        let xml = xmltree::Element::parse(&program_file[..])
+            .with_context(|| format!("Couldn't parse program file {} as XML", path.display()))?;
 
         // Parse the program/patch XMLs and flash away
         if let Some(n) = parse_program_xml(
