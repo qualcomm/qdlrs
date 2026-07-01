@@ -597,7 +597,7 @@ pub fn sahara_run<T: QdlChan>(
                 println!("Device booted into the loader already");
                 return Ok(vec![]);
             }
-            _ => todo!("Got packet {:?}", pkt),
+            _ => bail!("Got unexpected packet {:?}", pkt),
         }
     }
 }
