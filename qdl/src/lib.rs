@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 use anstream::println;
+use anyhow::Context;
 use anyhow::Result;
 use indexmap::{Equivalent, IndexMap};
 use owo_colors::OwoColorize;
@@ -668,7 +669,7 @@ pub fn firehose_read_storage(
         let chunk_size_bytes = min(bytes_left, channel.fh_config().recv_buffer_size);
         let mut buf = vec![0; chunk_size_bytes];
 
-        let n = channel.read(&mut buf).expect("Error receiving data");
+        let n = channel.read(&mut buf).context("Error receiving data")?;
         if n == 0 {
             // TODO: need more robustness here
             /* Every 2 or 3 packets should be empty? */
