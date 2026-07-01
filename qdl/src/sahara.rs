@@ -11,7 +11,7 @@ use std::{
     mem::{self, size_of_val},
 };
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail};
 
 use bincode::serialize;
 use serde::{self, Deserialize, Serialize};
@@ -472,11 +472,12 @@ pub fn sahara_dump_regions<T: QdlChan>(
     };
     for entry in filtered_list {
         let fname = CStr::from_bytes_until_nul(&entry.filename)
-            .unwrap()
+            .context("Ramdump table entry filename is not NUL-terminated")?
             .to_str()?
             .to_owned();
 
-        let mut f = File::create(std::path::Path::new(&format!("ramdump/{fname}")))?;
+        let mut f = File::create(std::path::Path::new(&format!("ramdump/{fname}")))
+            .with_context(|| format!("Couldn't create ramdump output file for {fname}"))?;
         sahara_dump_region(channel, entry, &mut f)?;
     }
 
@@ -617,38 +618,48 @@ fn sahara_parse_packet(buf: &[u8], verbose: bool) -> Result<SaharaPacket> {
         cmd,
         len: u32::from_le_bytes(*len),
         body: match cmd {
-            SaharaCmd::SaharaHello => {
-                SaharaPacketBody::HelloReq(bincode::deserialize::<HelloReq>(args).unwrap())
-            }
-            SaharaCmd::SaharaHelloResp => {
-                SaharaPacketBody::HelloResp(bincode::deserialize::<HelloResp>(args).unwrap())
-            }
-            SaharaCmd::SaharaReadData => {
-                SaharaPacketBody::ReadReq(bincode::deserialize::<ReadReq>(args).unwrap())
-            }
-            SaharaCmd::SaharaEndOfImage => {
-                SaharaPacketBody::Eoi(bincode::deserialize::<Eoi>(args).unwrap())
-            }
+            SaharaCmd::SaharaHello => SaharaPacketBody::HelloReq(
+                bincode::deserialize::<HelloReq>(args)
+                    .with_context(|| format!("Malformed {cmd:?} packet body"))?,
+            ),
+            SaharaCmd::SaharaHelloResp => SaharaPacketBody::HelloResp(
+                bincode::deserialize::<HelloResp>(args)
+                    .with_context(|| format!("Malformed {cmd:?} packet body"))?,
+            ),
+            SaharaCmd::SaharaReadData => SaharaPacketBody::ReadReq(
+                bincode::deserialize::<ReadReq>(args)
+                    .with_context(|| format!("Malformed {cmd:?} packet body"))?,
+            ),
+            SaharaCmd::SaharaEndOfImage => SaharaPacketBody::Eoi(
+                bincode::deserialize::<Eoi>(args)
+                    .with_context(|| format!("Malformed {cmd:?} packet body"))?,
+            ),
             SaharaCmd::SaharaDone => SaharaPacketBody::DoneReq(DoneReq {}),
-            SaharaCmd::SaharaDoneResp => {
-                SaharaPacketBody::DoneResp(bincode::deserialize::<DoneResp>(args).unwrap())
-            }
+            SaharaCmd::SaharaDoneResp => SaharaPacketBody::DoneResp(
+                bincode::deserialize::<DoneResp>(args)
+                    .with_context(|| format!("Malformed {cmd:?} packet body"))?,
+            ),
             SaharaCmd::SaharaResetResp => SaharaPacketBody::ResetResp(ResetResp {}),
             SaharaCmd::SaharaCommandReady => SaharaPacketBody::CommandReady(CommandReady {}),
-            SaharaCmd::SaharaExecuteResp => {
-                SaharaPacketBody::ExecResp(bincode::deserialize::<ExecResp>(args).unwrap())
-            }
-            SaharaCmd::SaharaExecuteData => {
-                SaharaPacketBody::Command(bincode::deserialize::<SaharaCmdModeCmd>(args).unwrap())
-            }
-            SaharaCmd::SaharaMemDebug64 => {
-                SaharaPacketBody::Debug64Req(bincode::deserialize::<Debug64Req>(args).unwrap())
-            }
-            SaharaCmd::SaharaMemRead64 => {
-                SaharaPacketBody::ReadMem64Req(bincode::deserialize::<ReadMem64Req>(args).unwrap())
-            }
+            SaharaCmd::SaharaExecuteResp => SaharaPacketBody::ExecResp(
+                bincode::deserialize::<ExecResp>(args)
+                    .with_context(|| format!("Malformed {cmd:?} packet body"))?,
+            ),
+            SaharaCmd::SaharaExecuteData => SaharaPacketBody::Command(
+                bincode::deserialize::<SaharaCmdModeCmd>(args)
+                    .with_context(|| format!("Malformed {cmd:?} packet body"))?,
+            ),
+            SaharaCmd::SaharaMemDebug64 => SaharaPacketBody::Debug64Req(
+                bincode::deserialize::<Debug64Req>(args)
+                    .with_context(|| format!("Malformed {cmd:?} packet body"))?,
+            ),
+            SaharaCmd::SaharaMemRead64 => SaharaPacketBody::ReadMem64Req(
+                bincode::deserialize::<ReadMem64Req>(args)
+                    .with_context(|| format!("Malformed {cmd:?} packet body"))?,
+            ),
             SaharaCmd::SaharaReadData64 => SaharaPacketBody::ReadData64Req(
-                bincode::deserialize::<ReadData64Req>(args).unwrap(),
+                bincode::deserialize::<ReadData64Req>(args)
+                    .with_context(|| format!("Malformed {cmd:?} packet body"))?,
             ),
             SaharaCmd::SaharaXML => bail!(
                 "Got Firehose command while expecting Sahara command: {:?}",
