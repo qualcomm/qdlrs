@@ -420,7 +420,8 @@ fn sahara_dump_region<T: QdlChan>(
         )?;
         channel.flush()?;
 
-        bytes_read += channel.read(&mut buf)?;
+        let n = channel.read(&mut buf)?;
+        bytes_read += n;
 
         // Issue a dummy read to consume the ZLP
         if channel.fh_config().backend == QdlBackend::Usb && buf.len().is_multiple_of(512) {
@@ -428,7 +429,7 @@ fn sahara_dump_region<T: QdlChan>(
         }
 
         pb.set(bytes_read as u64);
-        let _ = output.write(&buf)?;
+        output.write_all(&buf[..n])?;
     }
 
     Ok(())
