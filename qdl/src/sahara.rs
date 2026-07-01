@@ -590,6 +590,7 @@ pub fn sahara_run<T: QdlChan>(
             }
             SaharaCmd::SaharaResetResp => {
                 assert_eq!(pkt.len as usize, pktsize);
+                return Ok(vec![]);
             }
             SaharaCmd::SaharaXML => {
                 // Todo: make this optionally "fine"
