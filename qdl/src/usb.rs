@@ -55,11 +55,9 @@ impl BufRead for QdlUsbConfig {
             if self.buf.is_empty() {
                 self.buf.resize(4096, 0);
             }
-            match self.reader.read(&mut self.buf) {
-                Ok(n) => {
-                    self.cap = n;
-                }
-                Err(e) => return Err(e),
+            {
+                let n = self.reader.read(&mut self.buf)?;
+                self.cap = n;
             }
         }
         Ok(&self.buf[self.pos..self.cap])
