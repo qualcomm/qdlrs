@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
-use anyhow::bail;
+use anyhow::{Context, bail};
 use indexmap::IndexMap;
 use std::{
     fs,
     io::{Seek, SeekFrom},
     path::Path,
+    str::FromStr,
 };
 use xmltree::{self, Element, XMLNode};
 
@@ -14,24 +15,41 @@ use qdl::{
     types::QdlChan,
 };
 
+/// Fetch an attribute and parse it, attaching context on a missing key or a
+/// value that fails to parse, so a malformed program/patch file yields a
+/// clear error instead of a panic.
+fn parse_attr<T>(attrs: &IndexMap<String, String>, key: &str) -> anyhow::Result<T>
+where
+    T: FromStr,
+    T::Err: std::error::Error + Send + Sync + 'static,
+{
+    let val = attrs
+        .get(key)
+        .with_context(|| format!("Program file entry is missing the '{key}' attribute"))?;
+    val.parse::<T>()
+        .with_context(|| format!("Couldn't parse '{key}' attribute value \"{val}\""))
+}
+
+/// Fetch a required string attribute, attaching context on a missing key.
+fn get_attr<'a>(attrs: &'a IndexMap<String, String>, key: &str) -> anyhow::Result<&'a String> {
+    attrs
+        .get(key)
+        .with_context(|| format!("Program file entry is missing the '{key}' attribute"))
+}
+
 fn parse_read_cmd<T: QdlChan>(
     channel: &mut T,
     out_dir: &Path,
     attrs: &IndexMap<String, String>,
     checksum_only: bool,
 ) -> anyhow::Result<()> {
-    let num_sectors = attrs
-        .get("num_partition_sectors")
-        .unwrap()
-        .parse::<usize>()
-        .unwrap();
-    let slot = attrs.get("slot").map_or(0, |a| a.parse::<u8>().unwrap());
-    let phys_part_idx = attrs
-        .get("physical_partition_number")
-        .unwrap()
-        .parse::<u8>()
-        .unwrap();
-    let start_sector = attrs.get("start_sector").unwrap().parse::<u32>().unwrap();
+    let num_sectors = parse_attr::<usize>(attrs, "num_partition_sectors")?;
+    let slot = match attrs.get("slot") {
+        Some(_) => parse_attr::<u8>(attrs, "slot")?,
+        None => 0,
+    };
+    let phys_part_idx = parse_attr::<u8>(attrs, "physical_partition_number")?;
+    let start_sector = parse_attr::<u64>(attrs, "start_sector")?;
 
     if checksum_only {
         return firehose_checksum_storage(channel, num_sectors, phys_part_idx, start_sector);
@@ -40,7 +58,7 @@ fn parse_read_cmd<T: QdlChan>(
     if !attrs.contains_key("filename") {
         bail!("Got '<read>' tag without a filename");
     }
-    let mut outfile = fs::File::create(out_dir.join(attrs.get("filename").unwrap()))?;
+    let mut outfile = fs::File::create(out_dir.join(get_attr(attrs, "filename")?))?;
 
     firehose_read_storage(
         channel,
@@ -68,16 +86,15 @@ fn parse_patch_cmd<T: QdlChan>(
         bail!("Got '<patch>' tag without a filename");
     }
 
-    let byte_off = attrs.get("byte_offset").unwrap().parse::<u64>().unwrap();
-    let slot = attrs.get("slot").map_or(0, |a| a.parse::<u8>().unwrap());
-    let phys_part_idx = attrs
-        .get("physical_partition_number")
-        .unwrap()
-        .parse::<u8>()
-        .unwrap();
-    let size = attrs.get("size_in_bytes").unwrap().parse::<u64>().unwrap();
-    let start_sector = attrs.get("start_sector").unwrap();
-    let val = attrs.get("value").unwrap();
+    let byte_off = parse_attr::<u64>(attrs, "byte_offset")?;
+    let slot = match attrs.get("slot") {
+        Some(_) => parse_attr::<u8>(attrs, "slot")?,
+        None => 0,
+    };
+    let phys_part_idx = parse_attr::<u8>(attrs, "physical_partition_number")?;
+    let size = parse_attr::<u64>(attrs, "size_in_bytes")?;
+    let start_sector = get_attr(attrs, "start_sector")?;
+    let val = get_attr(attrs, "value")?;
 
     firehose_patch(
         channel,
@@ -101,36 +118,27 @@ fn parse_program_cmd<T: QdlChan>(
     bootable_part_idx: &mut Option<u8>,
     verbose: bool,
 ) -> anyhow::Result<()> {
-    let sector_size = attrs
-        .get("SECTOR_SIZE_IN_BYTES")
-        .unwrap()
-        .parse::<usize>()
-        .unwrap();
+    let sector_size = parse_attr::<usize>(attrs, "SECTOR_SIZE_IN_BYTES")?;
     if sector_size != channel.fh_config().storage_sector_size {
         bail!(
             "Mismatch in storage sector size! Programfile requests {}",
             sector_size
         );
     }
-    let num_sectors = attrs
-        .get("num_partition_sectors")
-        .unwrap()
-        .parse::<usize>()
-        .unwrap();
-    let slot = attrs.get("slot").map_or(0, |a| a.parse::<u8>().unwrap());
-    let phys_part_idx = attrs
-        .get("physical_partition_number")
-        .unwrap()
-        .parse::<u8>()
-        .unwrap();
-    let start_sector = attrs.get("start_sector").unwrap();
+    let num_sectors = parse_attr::<usize>(attrs, "num_partition_sectors")?;
+    let slot = match attrs.get("slot") {
+        Some(_) => parse_attr::<u8>(attrs, "slot")?,
+        None => 0,
+    };
+    let phys_part_idx = parse_attr::<u8>(attrs, "physical_partition_number")?;
+    let start_sector = get_attr(attrs, "start_sector")?;
+    // file_sector_offset is optional; treat a missing or unparseable value as 0
     let file_sector_offset = attrs
         .get("file_sector_offset")
-        .unwrap_or(&"".to_owned())
-        .parse::<u32>()
+        .and_then(|s| s.parse::<u32>().ok())
         .unwrap_or(0);
 
-    let label = attrs.get("label").unwrap();
+    let label = get_attr(attrs, "label")?;
     if num_sectors == 0 {
         println!("Skipping 0-length entry for {label}");
         return Ok(());
@@ -139,7 +147,7 @@ fn parse_program_cmd<T: QdlChan>(
         *bootable_part_idx = Some(phys_part_idx);
     }
 
-    let filename = attrs.get("filename").unwrap();
+    let filename = get_attr(attrs, "filename")?;
     let file_path = program_file_dir.join(filename);
     if allow_missing_files {
         if filename.is_empty() {
@@ -149,13 +157,14 @@ fn parse_program_cmd<T: QdlChan>(
             return Ok(());
         } else if !file_path.exists() {
             if verbose {
-                println!("Skipping non-existent file {}", file_path.to_str().unwrap());
+                println!("Skipping non-existent file {}", file_path.display());
             }
             return Ok(());
         }
     }
 
-    let mut buf = fs::File::open(file_path)?;
+    let mut buf = fs::File::open(&file_path)
+        .with_context(|| format!("Couldn't open program file {}", file_path.display()))?;
     buf.seek(SeekFrom::Current(
         sector_size as i64 * file_sector_offset as i64,
     ))?;
@@ -191,11 +200,11 @@ pub fn parse_program_xml<T: QdlChan>(
                         bail!("Got '<program>' tag without a filename");
                     }
 
-                    let filename = e.attributes.get("filename").unwrap();
+                    let filename = get_attr(&e.attributes, "filename")?;
                     let file_path = program_file_dir.join(filename);
 
                     if !file_path.exists() && !allow_missing_files {
-                        bail!("{} doesn't exist!", file_path.to_str().unwrap())
+                        bail!("{} doesn't exist!", file_path.display())
                     }
                 }
                 _ => continue,

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 use anstream::println;
+use anyhow::Context;
 use anyhow::Result;
 use indexmap::{Equivalent, IndexMap};
 use owo_colors::OwoColorize;
@@ -146,7 +147,8 @@ fn decode_programmer_archive(blob: &[u8], images: &mut Vec<Option<Vec<u8>>>) -> 
 /// Otherwise, the file is returned as a single-slot image list, preserving
 /// legacy single-image Sahara behavior.
 pub fn load_programmer_images(path: impl AsRef<Path>) -> Result<Vec<Option<Vec<u8>>>> {
-    let blob = fs::read(path.as_ref())?;
+    let blob = fs::read(path.as_ref())
+        .with_context(|| format!("Couldn't read programmer image {}", path.as_ref().display()))?;
     let mut images: Vec<Option<Vec<u8>>> = Vec::new();
 
     if decode_programmer_archive(&blob, &mut images)? {
@@ -300,7 +302,9 @@ pub fn firehose_read<T: QdlChan>(
 
                 // TODO: Use std::intrinsics::unlikely after it exits nightly
                 if e.attributes.get("AttemptRetry").is_some() {
-                    return firehose_read::<T>(channel, response_parser);
+                    // Restart the outer loop instead of recursing to avoid stack overflow
+                    got_any_data = false;
+                    continue;
                 } else if e.attributes.get("AttemptRestart").is_some() {
                     // TODO: handle this automagically
                     firehose_reset(channel, &FirehoseResetMode::ResetToEdl, 0)?;
@@ -395,7 +399,7 @@ pub fn firehose_configure<T: QdlChan>(
     // Sanity requirement
     assert!(
         config
-            .send_buffer_size
+            .recv_buffer_size
             .is_multiple_of(config.storage_sector_size)
     );
     let mut xml = firehose_xml_setup(
@@ -521,7 +525,7 @@ pub fn firehose_poke<T: QdlChan>(
         ],
     )?;
 
-    firehose_write_getack(channel, &mut xml, format!("peek @ {addr:#x}"))
+    firehose_write_getack(channel, &mut xml, format!("poke @ {addr:#x}"))
 }
 
 /// Write to Device storage
@@ -578,7 +582,9 @@ pub fn firehose_program_storage<T: QdlChan>(
         ];
         let _ = data.read(&mut buf).unwrap();
 
-        let n = channel.write(&buf).expect("Error sending data");
+        let n = channel
+            .write(&buf)
+            .with_context(|| format!("Error sending data for partition {label}"))?;
         if n != chunk_size_sectors * channel.fh_config().storage_sector_size {
             bail!("Wrote an unexpected number of bytes ({})", n);
         }
@@ -589,7 +595,7 @@ pub fn firehose_program_storage<T: QdlChan>(
 
     // Send a Zero-Length Packet to indicate end of stream
     if channel.fh_config().backend == QdlBackend::Usb {
-        let _ = channel.write(&[]).expect("Error sending ZLP");
+        channel.write(&[]).context("Error sending ZLP")?;
     }
 
     if firehose_read::<T>(channel, firehose_parser_ack_nak)? != FirehoseStatus::Ack {
@@ -604,7 +610,7 @@ pub fn firehose_checksum_storage<T: QdlChan>(
     channel: &mut T,
     num_sectors: usize,
     phys_part_idx: u8,
-    start_sector: u32,
+    start_sector: u64,
 ) -> anyhow::Result<()> {
     let mut xml = firehose_xml_setup(
         "getsha256digest",
@@ -636,7 +642,7 @@ pub fn firehose_read_storage(
     num_sectors: usize,
     slot: u8,
     phys_part_idx: u8,
-    start_sector: u32,
+    start_sector: u64,
 ) -> anyhow::Result<()> {
     let mut bytes_left = num_sectors * channel.fh_config().storage_sector_size;
     let mut xml = firehose_xml_setup(
@@ -666,7 +672,7 @@ pub fn firehose_read_storage(
         let chunk_size_bytes = min(bytes_left, channel.fh_config().recv_buffer_size);
         let mut buf = vec![0; chunk_size_bytes];
 
-        let n = channel.read(&mut buf).expect("Error receiving data");
+        let n = channel.read(&mut buf).context("Error receiving data")?;
         if n == 0 {
             // TODO: need more robustness here
             /* Every 2 or 3 packets should be empty? */
@@ -737,7 +743,7 @@ pub fn firehose_set_bootable<T: QdlChan>(channel: &mut T, drive_idx: u8) -> anyh
 }
 
 pub fn firehose_get_default_sector_size(t: &str) -> Option<usize> {
-    match FirehoseStorageType::from_str(t).unwrap() {
+    match FirehoseStorageType::from_str(t).ok()? {
         FirehoseStorageType::Emmc => Some(512),
         FirehoseStorageType::Nand => Some(4096),
         FirehoseStorageType::Nvme => Some(512),
