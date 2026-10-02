@@ -110,6 +110,30 @@ fn parse_patch_cmd<T: QdlChan>(
 const BOOTABLE_PART_NAMES: [&str; 3] = ["xbl", "xbl_a", "sbl1"];
 
 // TODO: readbackverify
+fn resolve_num_sectors(
+    requested: usize,
+    file_size: u64,
+    sector_size: usize,
+    file_sector_offset: u32,
+) -> anyhow::Result<usize> {
+    if requested != 0 {
+        return Ok(requested);
+    }
+
+    let offset_bytes = u64::from(file_sector_offset)
+        .checked_mul(sector_size as u64)
+        .context("file_sector_offset is too large")?;
+    let payload_size = file_size
+        .checked_sub(offset_bytes)
+        .context("file_sector_offset is beyond the program file")?;
+    let sectors = payload_size
+        .checked_add(sector_size as u64 - 1)
+        .context("program file is too large")?
+        / sector_size as u64;
+
+    usize::try_from(sectors).context("program file is too large for this platform")
+}
+
 fn parse_program_cmd<T: QdlChan>(
     channel: &mut T,
     program_file_dir: &Path,
@@ -125,7 +149,7 @@ fn parse_program_cmd<T: QdlChan>(
             sector_size
         );
     }
-    let num_sectors = parse_attr::<usize>(attrs, "num_partition_sectors")?;
+    let requested_num_sectors = parse_attr::<usize>(attrs, "num_partition_sectors")?;
     let slot = match attrs.get("slot") {
         Some(_) => parse_attr::<u8>(attrs, "slot")?,
         None => 0,
@@ -139,10 +163,6 @@ fn parse_program_cmd<T: QdlChan>(
         .unwrap_or(0);
 
     let label = get_attr(attrs, "label")?;
-    if num_sectors == 0 {
-        println!("Skipping 0-length entry for {label}");
-        return Ok(());
-    }
     if BOOTABLE_PART_NAMES.contains(&&label[..]) {
         *bootable_part_idx = Some(phys_part_idx);
     }
@@ -165,6 +185,19 @@ fn parse_program_cmd<T: QdlChan>(
 
     let mut buf = fs::File::open(&file_path)
         .with_context(|| format!("Couldn't open program file {}", file_path.display()))?;
+    let num_sectors = resolve_num_sectors(
+        requested_num_sectors,
+        buf.metadata()?.len(),
+        sector_size,
+        file_sector_offset,
+    )?;
+    if requested_num_sectors == 0 {
+        println!(
+            "Using {} sectors from {} for {label}",
+            num_sectors,
+            file_path.display()
+        );
+    }
     buf.seek(SeekFrom::Current(
         sector_size as i64 * file_sector_offset as i64,
     ))?;
@@ -237,4 +270,29 @@ pub fn parse_program_xml<T: QdlChan>(
     }
 
     Ok(bootable_part_idx)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_num_sectors;
+
+    #[test]
+    fn zero_sector_count_uses_file_size_rounded_up() {
+        assert_eq!(resolve_num_sectors(0, 513, 512, 0).unwrap(), 2);
+    }
+
+    #[test]
+    fn nonzero_sector_count_is_preserved() {
+        assert_eq!(resolve_num_sectors(7, 513, 512, 0).unwrap(), 7);
+    }
+
+    #[test]
+    fn zero_sector_count_accounts_for_file_offset() {
+        assert_eq!(resolve_num_sectors(0, 1536, 512, 1).unwrap(), 2);
+    }
+
+    #[test]
+    fn offset_beyond_file_is_rejected() {
+        assert!(resolve_num_sectors(0, 512, 512, 2).is_err());
+    }
 }
