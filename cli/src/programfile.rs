@@ -12,7 +12,7 @@ use xmltree::{self, Element, XMLNode};
 
 use qdl::{
     firehose_checksum_storage, firehose_patch, firehose_program_storage, firehose_read_storage,
-    types::QdlChan,
+    get_path_from_device, types::QdlChan,
 };
 
 /// Fetch an attribute and parse it, attaching context on a missing key or a
@@ -58,7 +58,8 @@ fn parse_read_cmd<T: QdlChan>(
     if !attrs.contains_key("filename") {
         bail!("Got '<read>' tag without a filename");
     }
-    let mut outfile = fs::File::create(out_dir.join(get_attr(attrs, "filename")?))?;
+    let filename = get_attr(attrs, "filename")?;
+    let mut outfile = fs::File::create(get_path_from_device(out_dir, filename)?)?;
 
     firehose_read_storage(
         channel,
