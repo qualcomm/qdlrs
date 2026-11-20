@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::min;
 use std::fs;
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use std::str::{self, FromStr};
 use types::FirehoseResetMode;
 use types::FirehoseStatus;
@@ -32,6 +32,14 @@ pub mod types;
 pub mod usb;
 
 pub const SAHARA_ID_EHOSTDL_IMG: usize = 13;
+
+pub fn get_path_from_device(dir: &Path, name: &str) -> Result<PathBuf> {
+    let mut components = Path::new(name).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(part)), None) => Ok(dir.join(part)),
+        _ => bail!("Refusing unsafe output file name {name:?}"),
+    }
+}
 
 const CPIO_MAGIC: &[u8; 6] = b"070701";
 

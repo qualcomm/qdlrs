@@ -9,6 +9,7 @@ use std::{
     fs::File,
     io::{Read, Write},
     mem::{self, size_of_val},
+    path::Path,
 };
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -476,7 +477,8 @@ pub fn sahara_dump_regions<T: QdlChan>(
             .to_str()?
             .to_owned();
 
-        let mut f = File::create(std::path::Path::new(&format!("ramdump/{fname}")))
+        let path = crate::get_path_from_device(Path::new("ramdump"), &fname)?;
+        let mut f = File::create(&path)
             .with_context(|| format!("Couldn't create ramdump output file for {fname}"))?;
         sahara_dump_region(channel, entry, &mut f)?;
     }

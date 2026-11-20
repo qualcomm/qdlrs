@@ -11,7 +11,7 @@ use qdl::types::{FirehoseResetMode, FirehoseStorageType, QdlBackend, QdlDevice};
 use qdl::{firehose_configure, firehose_read, firehose_reset, types::FirehoseConfiguration};
 use qdl::{
     firehose_get_default_sector_size, firehose_nop, firehose_peek, firehose_program_storage,
-    firehose_set_bootable, load_programmer_images, setup_target_device,
+    firehose_set_bootable, get_path_from_device, load_programmer_images, setup_target_device,
 };
 use util::{
     find_part, print_partition_table, read_gpt_from_storage, read_storage_logical_partition,
@@ -311,7 +311,8 @@ fn main() -> Result<()> {
                     continue;
                 }
 
-                let mut out = File::create(outpath.join(p.partition_name.to_string()))?;
+                let name = p.partition_name.to_string();
+                let mut out = File::create(get_path_from_device(outpath, &name)?)?;
                 read_storage_logical_partition(
                     &mut qdl_dev,
                     &mut out,
@@ -325,7 +326,7 @@ fn main() -> Result<()> {
         Command::DumpPart { name, outdir } => {
             fs::create_dir_all(&outdir)?;
             let outpath = Path::new(&outdir);
-            let mut out = File::create(outpath.join(&name))?;
+            let mut out = File::create(get_path_from_device(outpath, &name)?)?;
 
             read_storage_logical_partition(
                 &mut qdl_dev,
