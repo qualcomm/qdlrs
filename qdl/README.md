@@ -1,0 +1,1 @@
+# Qualcomm Sahara / Firehose library
