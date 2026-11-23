@@ -8,7 +8,6 @@ license = "BSD-3-Clause"
 readme = "README.md"
 repository = "https://github.com/qualcomm/qdlrs"
 categories = ["embedded"]
-publish = false # TODO
 
 [badges]
 maintenance = { status = "actively-developed" }
